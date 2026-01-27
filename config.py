@@ -1,9 +1,9 @@
 # config.py
 
 # --- 真实视觉系统配置 ---
-VISION_MODE = True        # 是否使用真实视觉系统 (True: 真实视觉; False: 虚拟轨迹)
-VISION_SOURCE = 'video/test2_complex.mp4'  # 视频文件路径 或 相机ID (如 0)
-VISION_UPDATE_INTERVAL = 0.01  # 视觉系统更新目标间隔 (秒)，例如 10ms
+VISION_MODE = False        # 是否使用真实视觉系统 (True: 真实视觉; False: 虚拟轨迹)
+VISION_SOURCE = 'video/test1_linear.mp4'  # 视频文件路径 或 相机ID (如 0)
+VISION_UPDATE_INTERVAL = 0.02  # 视觉系统更新目标间隔 (秒)，例如 10ms
 # 注意：这只是为了控制处理频率，不代表一定要等待这么久
 
 CAMERA_CALIBRATION_FILE = "calib/calibration_data.npz" # 标定文件路径
@@ -19,8 +19,8 @@ ARUCO_MARKER_SIZE = 95.0  # 标记边长 (毫米)
 VISION_TO_ROBOT_OFFSET = [0.3, 0.0, 0.15]
 
 # --- 时间与频率 ---
-DT_CTRL = 0.002       # 机器人控制周期 8ms (125Hz)
-DT_VISION = 0.01     # 视觉采样周期 33ms (30Hz)
+DT_CTRL = 0.008       # 机器人控制周期 8ms (125Hz)
+DT_VISION = 0.02     # 视觉采样周期 20ms (50Hz)
 
 # 仿真时长配置
 # 对于 'circle' 和 'linear' 模式：使用 SIM_DURATION
