@@ -1,0 +1,10 @@
+# Python 编译文件
+__pycache__/
+*.py[cod]
+
+
+# VS Code 配置 (个人设置通常不需要上传)
+.vscode/
+
+# 你的仿真视频输出 (避免仓库体积过大)
+output/
