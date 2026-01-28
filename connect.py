@@ -132,7 +132,7 @@ class ArisRobotClient:
 # ==========================================
 if __name__ == "__main__":
     # 【建议】超时时间设为 10秒 或 20秒，取决于你的动作幅度
-    robot = ArisRobotClient("192.168.1.5", 5888, timeout=20)
+    robot = ArisRobotClient("192.168.0.5", 5888, timeout=20)
     
     if robot.connect():
         # 1. 登录 & 上电
