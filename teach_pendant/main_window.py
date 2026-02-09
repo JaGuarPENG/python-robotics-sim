@@ -15,6 +15,8 @@ from PyQt5.QtGui import QFont
 
 from spatialmath import SE3 # 用于 IK 计算目标位姿
 
+from fast_ik.ik_solver import FastIKSolver # C++ 后端 IK
+
 from .config import (
     ROBOT_IP, PORT_CONTROL, PRESET_POSITIONS,
     JOG_STEP_SMALL, JOG_STEP_MEDIUM, JOG_STEP_LARGE
@@ -45,6 +47,7 @@ class TeachPendantWindow(QMainWindow):
         super().__init__()
         self.signals = WorkerSignals()
         self.controller = RobotController(self.signals)
+        self.fast_ik = FastIKSolver() # 初始化 C++ IK 求解器
         self.jog_step = JOG_STEP_MEDIUM
         self.stop_continuous_flag = False  # 连续运动停止标志
 
@@ -761,7 +764,7 @@ class TeachPendantWindow(QMainWindow):
             self.coord_value.setText("Tool")  # 使用工具坐标系 (Eye-in-Hand)
             # 跟随模式启动后，如果 UDP 已连接则启用发送按钮和测试按钮
             if self.controller.udp_connected:
-                self.send_pose_btn.setEnabled(True)
+                # self.send_pose_btn.setEnabled(True) # 已移除
                 self.test_p1_btn.setEnabled(True)
                 self.test_p2_btn.setEnabled(True)
                 self.test_p3_btn.setEnabled(True)
@@ -775,7 +778,7 @@ class TeachPendantWindow(QMainWindow):
             self.one_click_follower_btn.setEnabled(True)
             self.coord_value.setText("Joint")
             # 跟随模式停止，禁用发送按钮和测试按钮
-            self.send_pose_btn.setEnabled(False)
+            # self.send_pose_btn.setEnabled(False) # 已移除
             self.test_p1_btn.setEnabled(False)
             self.test_p2_btn.setEnabled(False)
             self.test_p3_btn.setEnabled(False)
@@ -789,7 +792,7 @@ class TeachPendantWindow(QMainWindow):
             self.udp_connect_btn.setText("断开 UDP")
             # 如果跟随模式已启动，启用发送按钮和测试按钮
             if self.controller.is_follower_mode:
-                self.send_pose_btn.setEnabled(True)
+                # self.send_pose_btn.setEnabled(True) # 已移除
                 self.test_p1_btn.setEnabled(True)
                 self.test_p2_btn.setEnabled(True)
                 self.test_p3_btn.setEnabled(True)
@@ -801,7 +804,7 @@ class TeachPendantWindow(QMainWindow):
         if "UDP 连接已断开" in message:
             self.udp_status.setStyleSheet("color: gray; font-size: 16px;")
             self.udp_connect_btn.setText("连接 UDP (9998)")
-            self.send_pose_btn.setEnabled(False)
+            # self.send_pose_btn.setEnabled(False) # 已移除
             self.test_p1_btn.setEnabled(False)
             self.test_p2_btn.setEnabled(False)
             self.test_p3_btn.setEnabled(False)
@@ -1033,36 +1036,30 @@ class TeachPendantWindow(QMainWindow):
         self.statusBar.showMessage(f"正在解算 IK: ({x}, {y}, {z})...")
         
         try:
-            # 1. 构建目标位姿矩阵 (SE3)
-            # 假设 rx, ry, rz 对应 ZYX 欧拉角顺序 (先绕Z，再绕Y，最后绕X)
-            # 位置转为米
-            T = SE3(x/1000.0, y/1000.0, z/1000.0) * \
-                SE3.Rz(rz, unit='deg') * \
-                SE3.Ry(ry, unit='deg') * \
-                SE3.Rx(rx, unit='deg')
-            
-            # 2. 进行逆运动学解算 (IK)
-            # 使用 Levenberg-Marquardt 数值解法
-            # q0 可以设为当前关节角作为初值，加快收敛
-            import time
+            # 1. 准备参数
+            pos = [x/1000.0, y/1000.0, z/1000.0]
+            rpy = [rx, ry, rz] # 度
             current_q_rad = np.deg2rad(self.controller.current_joints)
             
-            t_start = time.perf_counter()
-            sol = self.robot_view.robot.ikine_LM(T, q0=current_q_rad)
-            t_end = time.perf_counter()
-            ik_time = (t_end - t_start) * 1000 # ms
+            # 2. 调用 C++ 后端解算 (PyBullet)
+            # solve_ik 返回 (joints_rad, elapsed_ms)
+            target_q_rad, ik_time = self.fast_ik.solve_ik(
+                pos=pos, 
+                rpy_deg=rpy, 
+                current_joints=current_q_rad
+            )
             
-            print(f"[IK] 单点解算耗时: {ik_time:.2f} ms")
+            print(f"[FastIK] 单点解算耗时: {ik_time:.2f} ms")
             
-            if not sol.success:
-                QMessageBox.warning(self, "IK 失败", f"无法找到该位姿的逆解!\n原因: {sol.reason}\n耗时: {ik_time:.2f} ms")
+            if target_q_rad is None:
+                QMessageBox.warning(self, "IK 失败", f"无法找到该位姿的逆解!\n耗时: {ik_time:.2f} ms")
                 return
                 
             # 3. 提取关节角并转为度
-            target_joints_deg = np.rad2deg(sol.q).tolist()
+            target_joints_deg = np.rad2deg(target_q_rad).tolist()
             
             # 4. 确认是否移动
-            msg = f"已解算出关节角 (耗时 {ik_time:.2f} ms):\n{['%.2f'%j for j in target_joints_deg]}\n\n是否立即移动机器人?"
+            msg = f"已通过 C++ 后端解算出关节角 (耗时 {ik_time:.2f} ms):\n{['%.2f'%j for j in target_joints_deg]}\n\n是否立即移动机器人?"
             reply = QMessageBox.question(self, "确认移动", msg, QMessageBox.Yes | QMessageBox.No)
             
             if reply == QMessageBox.Yes:
@@ -1132,27 +1129,26 @@ class TeachPendantWindow(QMainWindow):
             for i, (tx, ty, tz) in enumerate(trajectory_points):
                 self.signals.status_updated.emit(f"正在前往轨迹点 {i+1}/{total}...")
                 
-                # 构建位姿 (保持姿态不变，只改变位置)
-                T = SE3(tx/1000.0, ty/1000.0, tz/1000.0) * \
-                    SE3.Rz(rz, unit='deg') * \
-                    SE3.Ry(ry, unit='deg') * \
-                    SE3.Rx(rx, unit='deg')
+                # 1. 准备参数 (保持姿态不变)
+                target_pos = [tx/1000.0, ty/1000.0, tz/1000.0]
+                target_rpy = [rx, ry, rz] # 度
                 
-                # IK 解算 (使用上一帧解作为初值 q0)
-                t_start = time.perf_counter()
-                sol = self.robot_view.robot.ikine_LM(T, q0=last_q_rad)
-                t_end = time.perf_counter()
-                ik_time = (t_end - t_start) * 1000 # ms
+                # 2. 调用 C++ 后端解算 (PyBullet)
+                # 使用上一次的解作为种子，保证轨迹连续
+                target_q_rad, ik_time = self.fast_ik.solve_ik(
+                    pos=target_pos,
+                    rpy_deg=target_rpy,
+                    current_joints=last_q_rad
+                )
                 
-                if sol.success:
-                    print(f"[IK] 点 {i+1} 解算耗时: {ik_time:.2f} ms")
+                if target_q_rad is not None:
+                    print(f"[FastIK] 点 {i+1} 解算耗时: {ik_time:.2f} ms")
                     
-                    target_joints = np.rad2deg(sol.q).tolist()
-                    last_q_rad = sol.q # 更新初值
+                    target_joints_deg = np.rad2deg(target_q_rad).tolist()
+                    last_q_rad = target_q_rad # 更新初值
                     
                     # 发送指令
-                    # move_joint 内部是阻塞调用(等待机器人回复)，所以天然同步
-                    self.controller.move_joint(target_joints, vels)
+                    self.controller.move_joint(target_joints_deg, vels)
                     
                     # 稍微停顿，展示效果
                     time.sleep(0.5) 
@@ -1168,6 +1164,9 @@ class TeachPendantWindow(QMainWindow):
         """窗口关闭事件"""
         self.view_timer.stop()
         self.controller.stop()
+        # 关闭 C++ IK 求解器
+        if hasattr(self, 'fast_ik'):
+            self.fast_ik.close()
         # 关闭 PyVista 渲染器
         try:
             self.robot_view.plotter.close()

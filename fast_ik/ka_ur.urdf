@@ -1,0 +1,168 @@
+<?xml version="1.0"?>
+<robot name="ka_ur">
+
+  <!-- Base Link -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.2 0.2 0.05"/>
+      </geometry>
+    </visual>
+  </link>
+
+  
+  <link name="link1">
+    <visual>
+      <geometry>
+        <cylinder length="0.15" radius="0.06"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+  </link>
+
+  
+  <link name="link2">
+    <visual>
+      <geometry>
+        <cylinder length="0.6" radius="0.05"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+  </link>
+
+  
+  <link name="link3">
+    <visual>
+      <geometry>
+        <cylinder length="0.5" radius="0.05"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+  </link>
+
+  
+  <link name="link4">
+    <visual>
+      <geometry>
+        <cylinder length="0.1" radius="0.04"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+  </link>
+
+  
+  <link name="link5">
+    <visual>
+      <geometry>
+        <cylinder length="0.1" radius="0.04"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+  </link>
+
+  
+  <link name="link6">
+    <visual>
+      <geometry>
+        <cylinder length="0.05" radius="0.03"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 0.8 1"/>
+      </material>
+    </visual>
+  </link>
+
+  
+  <!-- TCP Link (End Effector) -->
+  <link name="tool0"/>
+
+  <!-- Joint 1: Base -> Link1 -->
+  <!-- Logic: tz(0.1693) * Rz -->
+  
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/>
+    <child link="link1"/>
+    <origin xyz="0 0 0.1693" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="3.0"/>
+  </joint>
+
+
+  <!-- Joint 2: Link1 -> Link2 -->
+  <!-- Logic: ty(0.1793) * Rx(-90) * Rz -->
+  
+  <joint name="joint2" type="revolute">
+    <parent link="link1"/>
+    <child link="link2"/>
+    <origin xyz="0 0.1793 0" rpy="-1.5707963267948966 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="3.0"/>
+  </joint>
+
+
+  <!-- Joint 3: Link2 -> Link3 -->
+  <!-- Logic: ty(-0.625) * Rz -->
+  
+  <joint name="joint3" type="revolute">
+    <parent link="link2"/>
+    <child link="link3"/>
+    <origin xyz="0 -0.625 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="3.0"/>
+  </joint>
+
+
+  <!-- Joint 4: Link3 -> Link4 -->
+  <!-- Logic: tz(-0.1626) * ty(-0.595) * Rz -->
+  
+  <joint name="joint4" type="revolute">
+    <parent link="link3"/>
+    <child link="link4"/>
+    <origin xyz="0 -0.595 -0.1626" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="3.0"/>
+  </joint>
+
+
+  <!-- Joint 5: Link4 -> Link5 -->
+  <!-- Logic: tz(0.1052) * Rx(90) * Rz -->
+  
+  <joint name="joint5" type="revolute">
+    <parent link="link4"/>
+    <child link="link5"/>
+    <origin xyz="0 0 0.1052" rpy="1.5707963267948966 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="3.0"/>
+  </joint>
+
+
+  <!-- Joint 6: Link5 -> Link6 -->
+  <!-- Logic: tz(0.1052) * ty(0.11) * Rx(-90) * Rz -->
+  
+  <joint name="joint6" type="revolute">
+    <parent link="link5"/>
+    <child link="link6"/>
+    <origin xyz="0 0.11 0.1052" rpy="-1.5707963267948966 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="3.0"/>
+  </joint>
+
+
+  <!-- TCP Joint (Fixed) -->
+  <joint name="joint_tcp" type="fixed">
+    <parent link="link6"/>
+    <child link="tool0"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+</robot>
