@@ -4,6 +4,7 @@ import queue
 import numpy as np
 import roboticstoolbox as rtb
 import matplotlib.pyplot as plt
+from spatialmath import SE3 # 用于定义目标位姿
 
 # 导入模块 (确保路径正确)
 from tools.robot_dh import create_ka_ur
@@ -17,7 +18,7 @@ shared_data = {
 data_lock = threading.Lock() 
 cmd_queue = queue.Queue()
 
-ROBOT_IP = "192.168.1.5"
+ROBOT_IP = "192.168.0.10"
 PORT_MONITOR = 5888  # 监听端口
 PORT_CONTROL = 5999  # 控制端口
 
@@ -123,9 +124,17 @@ def on_key_press(event):
         cmd_queue.put({'type': 'movej', 'joints': target, 'vels': vel})
         
     elif event.key == '2':
-        print("\n[按键] 2 -> 移动到目标点")
-        # 这里的角度根据你的机器人实际情况调整
-        target = [0, 0, 150, -60, -90, 0] 
+        print("\n[按键] 2 -> 移动到目标点 (远离奇异点)")
+        # 安全位置：避开奇异点和关节限位
+        target = [0, -20, 90, 0, -45, 0]
+        vel = [100, 200, 100]
+        cmd_queue.put({'type': 'movej', 'joints': target, 'vels': vel})
+
+    elif event.key == '3':
+        print("\n[按键] 3 -> 移动到标准姿态 (Rx=0, Ry=0, Rz=0)")
+        print("注意：法兰盘将水平向前。请确保上方和前方空间！")
+        # 典型“水平向前”姿态: [0, -90, 90, -90, 90, 0]
+        target = [0, -90, 90, -90, 90, 0]
         vel = [100, 200, 100]
         cmd_queue.put({'type': 'movej', 'joints': target, 'vels': vel})
 

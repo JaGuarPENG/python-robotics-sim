@@ -74,3 +74,32 @@ KF_PROCESS_NOISE = 0.05    # 过程噪声协方差
 KF_MEASUREMENT_NOISE = 0.5 # 测量噪声协方差
 KF_VEL_COV = 200.0        # 速度初始协方差
 KF_ACC_COV = 200.0        # 加速度初始协方差
+
+# --- 遥操作/视觉伺服配置 ---
+# 机器人控制器连接
+FOLLOWER_ROBOT_IP = "192.168.0.10"   # 工控机 IP 地址
+FOLLOWER_ROBOT_PORT = 9998           # 遥操作 UDP 端口
+
+# 控制频率
+SERVO_CONTROL_RATE = 50.0   # 伺服控制频率 (Hz)
+SERVO_VISION_RATE = 30.0    # 视觉处理频率 (Hz)
+
+# 工作空间安全限制 (米)
+WORKSPACE_X_MIN = -0.3
+WORKSPACE_X_MAX = 0.6
+WORKSPACE_Y_MIN = -0.4
+WORKSPACE_Y_MAX = 0.4
+WORKSPACE_Z_MIN = 0.05
+WORKSPACE_Z_MAX = 0.5
+
+# 速度限制
+SERVO_MAX_VELOCITY = 0.3    # 最大线速度 (m/s)
+
+# 固定末端姿态 (弧度)
+# 默认末端朝下 (绕 Y 轴旋转 180 度)
+SERVO_FIXED_RX = 0.0
+SERVO_FIXED_RY = 3.14159
+SERVO_FIXED_RZ = 0.0
+
+# 跟踪偏移 (末端相对于目标的偏移)
+SERVO_TRACKING_OFFSET = [0.0, 0.0, 0.15]  # 末端在目标上方 15cm
