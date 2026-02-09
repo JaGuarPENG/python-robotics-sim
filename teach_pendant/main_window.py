@@ -1149,9 +1149,6 @@ class TeachPendantWindow(QMainWindow):
                     
                     # 发送指令
                     self.controller.move_joint(target_joints_deg, vels)
-                    
-                    # 稍微停顿，展示效果
-                    time.sleep(0.5) 
                 else:
                     self.signals.error_occurred.emit(f"轨迹点 {i+1} IK解算失败! 耗时: {ik_time:.2f} ms")
                     break
