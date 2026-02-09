@@ -2,8 +2,9 @@
 关节控制面板组件 (Joint, Jog, Presets, Velocity)
 """
 
+import threading
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QGridLayout, QLabel, QPushButton, QSlider
+    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QGridLayout, QLabel, QPushButton, QSlider, QMessageBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
@@ -61,17 +62,20 @@ class JointControlPanel(QWidget):
         step_layout.addWidget(QLabel("步进:"))
         self.step_small_btn = QPushButton(f"{JOG_STEP_SMALL}°")
         self.step_small_btn.setCheckable(True)
+        self.step_small_btn.setEnabled(False)
         self.step_small_btn.clicked.connect(lambda: self.set_jog_step(JOG_STEP_SMALL))
         step_layout.addWidget(self.step_small_btn)
 
         self.step_medium_btn = QPushButton(f"{JOG_STEP_MEDIUM}°")
         self.step_medium_btn.setCheckable(True)
         self.step_medium_btn.setChecked(True)
+        self.step_medium_btn.setEnabled(False)
         self.step_medium_btn.clicked.connect(lambda: self.set_jog_step(JOG_STEP_MEDIUM))
         step_layout.addWidget(self.step_medium_btn)
 
         self.step_large_btn = QPushButton(f"{JOG_STEP_LARGE}°")
         self.step_large_btn.setCheckable(True)
+        self.step_large_btn.setEnabled(False)
         self.step_large_btn.clicked.connect(lambda: self.set_jog_step(JOG_STEP_LARGE))
         step_layout.addWidget(self.step_large_btn)
         jog_layout.addLayout(step_layout, 0, 0, 1, 4)
@@ -117,7 +121,7 @@ class JointControlPanel(QWidget):
             btn = QPushButton(name)
             btn.setMinimumHeight(40)
             btn.setEnabled(False)
-            btn.clicked.connect(lambda checked, j=joints: self.controller.move_joint(j))
+            btn.clicked.connect(lambda checked, n=name, j=joints: self.on_preset_clicked(n, j))
             preset_layout.addWidget(btn, row, col)
             self.preset_btns.append(btn)
             col += 1
@@ -153,6 +157,17 @@ class JointControlPanel(QWidget):
         vel_layout.addLayout(vel_btn_layout)
         layout.addWidget(vel_group)
 
+    def on_preset_clicked(self, name, target_joints):
+        """点击预设位置：确认并异步执行"""
+        msg = f"是否立即移动到预设位置 [{name}]?\n\n目标角度:\n{['%.2f'%j for j in target_joints]}"
+        reply = QMessageBox.question(self, "确认运动", msg, QMessageBox.Yes | QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            self.signals.status_updated.emit(f"正在前往预设位置: {name}")
+            # 使用安全速度
+            vels = [20, 20, 20] 
+            threading.Thread(target=lambda: self.controller.move_joint(target_joints, vels=vels), daemon=True).start()
+
     def connect_signals(self):
         """连接信号"""
         self.signals.joints_updated.connect(self.update_joint_display)
@@ -177,8 +192,6 @@ class JointControlPanel(QWidget):
     def on_velocity_slider_changed(self, value):
         """速度滑块变化"""
         self.vel_value_label.setText(f"{value}%")
-        # 注意：这里我们不直接在 slider 变化时发送指令，避免过快
-        # 但 UI 上需要显示
 
     def set_velocity(self, percent):
         """设置速度并更新 UI"""
@@ -189,4 +202,8 @@ class JointControlPanel(QWidget):
         """启用/禁用所有运动控制"""
         for btn in self.jog_minus_btns + self.jog_plus_btns + self.preset_btns:
             btn.setEnabled(enabled)
+        
+        self.step_small_btn.setEnabled(enabled)
+        self.step_medium_btn.setEnabled(enabled)
+        self.step_large_btn.setEnabled(enabled)
         self.vel_slider.setEnabled(enabled)

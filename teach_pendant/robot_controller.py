@@ -97,6 +97,7 @@ class RobotController:
         self.monitor_thread.start()
 
     def _monitor_loop(self):
+        status_counter = 0
         while self.is_monitoring:
             try:
                 client = self.monitor_client if self.monitor_client else self.ws_client
@@ -113,6 +114,15 @@ class RobotController:
                     with client._position_lock:
                         if client._actual_pe is not None:
                             self.state.update_tcp(client._actual_pe.tolist()[:6])
+
+                    # 每 0.5s 自动刷新一次详细状态
+                    status_counter += 1
+                    if status_counter >= 10:
+                        status_counter = 0
+                        if client.last_status:
+                            info = self._parse_status(client.last_status)
+                            self.state.update_status_info(info)
+                            self.signals.robot_status_updated.emit(info)
                 
                 time.sleep(0.05)
             except: pass

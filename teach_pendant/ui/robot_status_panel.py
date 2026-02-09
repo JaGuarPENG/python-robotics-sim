@@ -6,7 +6,7 @@ import threading
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QGridLayout, QLabel, QPushButton
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
 from ..signals import WorkerSignals
@@ -14,6 +14,9 @@ from ..robot_controller import RobotController
 
 class RobotStatusPanel(QWidget):
     """机器人状态和 TCP 显示面板"""
+    
+    # 定义切换模型信号
+    model_toggle_requested = pyqtSignal()
 
     def __init__(self, controller: RobotController, signals: WorkerSignals, parent=None):
         super().__init__(parent)
@@ -76,7 +79,12 @@ class RobotStatusPanel(QWidget):
         self.refresh_status_btn = QPushButton("刷新状态")
         self.refresh_status_btn.setEnabled(False)
         self.refresh_status_btn.clicked.connect(self.on_refresh_status)
-        status_layout.addWidget(self.refresh_status_btn, 2, 0, 1, 2)
+        status_layout.addWidget(self.refresh_status_btn, 2, 0, 1, 1)
+
+        self.toggle_model_btn = QPushButton("切换模型 (3D)")
+        self.toggle_model_btn.setStyleSheet("background-color: #34495e; color: white;")
+        self.toggle_model_btn.clicked.connect(self.model_toggle_requested.emit)
+        status_layout.addWidget(self.toggle_model_btn, 2, 1, 1, 1)
 
         status_layout.addWidget(QLabel("错误信息:"), 2, 2)
         self.robot_error_value = QLabel("无")

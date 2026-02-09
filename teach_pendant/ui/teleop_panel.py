@@ -33,7 +33,7 @@ class TeleopPanel(QWidget):
 
         # UDP 连接控制
         self.udp_connect_btn = QPushButton("连接 UDP (9998)")
-        self.udp_connect_btn.setEnabled(False)
+        self.udp_connect_btn.setEnabled(True)
         self.udp_connect_btn.setStyleSheet("background-color: #3498db; color: white;")
         self.udp_connect_btn.clicked.connect(self.on_udp_connect)
         teleop_layout.addWidget(self.udp_connect_btn, 0, 0, 1, 2)
@@ -95,6 +95,7 @@ class TeleopPanel(QWidget):
     def connect_signals(self):
         """连接信号"""
         self.signals.status_updated.connect(self._on_status_updated)
+        self.signals.command_finished.connect(lambda success, msg: self._on_status_updated(msg))
 
     def on_udp_connect(self):
         """UDP 连接/断开点击"""
@@ -128,7 +129,8 @@ class TeleopPanel(QWidget):
 
     def _on_status_updated(self, message):
         """状态更新 UI 反馈"""
-        if "UDP 遥操作连接成功" in message:
+        # 修正匹配字符串，使其与 RobotController 发出的消息一致
+        if "UDP 连接成功" in message:
             self.udp_status.setStyleSheet("color: lime; font-size: 16px;")
             self.udp_connect_btn.setText("断开 UDP")
             self._update_test_btns()
@@ -136,6 +138,10 @@ class TeleopPanel(QWidget):
         if "UDP 连接已断开" in message:
             self.udp_status.setStyleSheet("color: gray; font-size: 16px;")
             self.udp_connect_btn.setText("连接 UDP (9998)")
+            self._update_test_btns()
+
+        # 新增：当跟随模式状态变化时，也触发按钮更新
+        if "跟随模式" in message or "follower_cart" in message:
             self._update_test_btns()
 
     def _update_test_btns(self):

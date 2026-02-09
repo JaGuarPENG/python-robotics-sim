@@ -93,6 +93,7 @@ class TeachPendantWindow(QMainWindow):
 
         # 2. 状态显示 (TCP & Robot Status)
         self.status_panel = RobotStatusPanel(self.controller, self.signals)
+        self.status_panel.model_toggle_requested.connect(self.on_toggle_model)
         left_layout.addWidget(self.status_panel)
 
         main_layout.addWidget(left_panel, stretch=3)
@@ -140,10 +141,33 @@ class TeachPendantWindow(QMainWindow):
 
     def connect_signals(self):
         """连接全局信号"""
-        self.signals.status_updated.connect(self.statusBar.showMessage)
+        self.signals.status_updated.connect(self.update_status) # 修正：连接到自己的 update_status
         self.signals.error_occurred.connect(lambda msg: QMessageBox.critical(self, "错误", msg))
         self.signals.connection_changed.connect(self.on_connection_changed)
         self.signals.command_finished.connect(self.on_command_finished)
+
+    def update_status(self, message):
+        """处理状态更新，激活 UI 组件"""
+        self.statusBar.showMessage(message)
+
+        if "登录成功" in message:
+            self.status_panel.set_refresh_enabled(True)
+
+        if "已退出登录" in message:
+            self.status_panel.set_refresh_enabled(False)
+            self.joint_control_panel.enable_controls(False)
+            self.follower_panel.set_controls_enabled(False)
+            self.teleop_panel.set_udp_enabled(False)
+
+        if "使能成功" in message:
+            # 核心激活点
+            self.joint_control_panel.enable_controls(True)
+            self.follower_panel.set_controls_enabled(True)
+            self.teleop_panel.set_udp_enabled(True)
+
+        if "跟随模式" in message or "follower_cart" in message:
+            # 确保在控制器状态更新后，强制刷新遥操作面板按钮
+            self.teleop_panel._update_test_btns()
 
     def update_3d_view(self):
         """同步更新 3D 视图与 TCP 显示"""
@@ -168,12 +192,18 @@ class TeachPendantWindow(QMainWindow):
 
     def on_command_finished(self, success, message):
         """通用命令结果处理"""
-        self.statusBar.showMessage(message)
+        # 修正：通过 update_status 统一处理，以激活相关 UI
+        self.update_status(message)
 
     def on_one_click_follower(self):
         """中转：调用 FollowerPanel 并传入当前 IP"""
         ip = self.conn_panel.get_ip()
         self.follower_panel.on_one_click_follower(ip)
+
+    def on_toggle_model(self):
+        """切换 3D 机器人模型显示"""
+        mode_name = self.robot_view.toggle_render_mode()
+        self.statusBar.showMessage(f"当前显示模式: {mode_name}")
 
     def on_move_to_target(self):
         """移动到 3D 目标点 (逻辑委托给 traj_service)"""

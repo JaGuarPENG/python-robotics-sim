@@ -8,7 +8,7 @@ import numpy as np
 class SafetyGuard:
     """负责运动指令的拦截与合法性检查"""
 
-    def __init__(self, max_vel_ms: float = 0.5, max_inc_mm: float = 5.0):
+    def __init__(self, max_vel_ms: float = 0.5, max_inc_mm: float = 50.0):
         self.max_vel_ms = max_vel_ms
         self.max_inc_mm = max_inc_mm
         self.last_send_time = 0.0

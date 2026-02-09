@@ -52,6 +52,14 @@ class Robot3DWidget(QWidget):
     def clear_trajectory(self):
         self.renderer.clear_trajectory()
 
+    def toggle_render_mode(self):
+        """切换简化/精细模型"""
+        new_mode = 1 - self.renderer.mode
+        self.renderer.set_mode(new_mode)
+        # 立即根据当前角度重绘一次
+        self.update_robot(self.model.dh_robot.q * 180 / np.pi)
+        return "精细模型" if new_mode == 1 else "简化模型"
+
     def reset_view(self):
         self.plotter.camera_position = [(1.2, -1.2, 0.8), (0, 0, 0.3), (0, 0, 1)]
         self.plotter.reset_camera()
