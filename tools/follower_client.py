@@ -374,6 +374,9 @@ class FollowerClientWebSocket:
         self._actual_pq: Optional[np.ndarray] = None
         self._actual_joint_pos: Optional[np.ndarray] = None
         self._position_lock = threading.Lock()
+        
+        # 新增：WebSocket 通信锁，防止多线程竞争
+        self._sock_lock = threading.Lock()
 
         # 最后一次状态查询结果
         self.last_status: Optional[dict] = None
@@ -384,32 +387,41 @@ class FollowerClientWebSocket:
 
     def connect(self) -> bool:
         """建立 WebSocket 连接"""
-        try:
-            import websocket
-            self.ws = websocket.WebSocket()
-            self.ws.settimeout(self.timeout)
-            self.ws.connect(f"ws://{self.ip}:{self.port}")
-            self.is_connected = True
-            print(f"[WebSocket] 已连接到 ws://{self.ip}:{self.port}")
-            return True
-        except ImportError:
-            print("[WebSocket] 需要安装 websocket-client: pip install websocket-client")
-            return False
-        except Exception as e:
-            print(f"[WebSocket] 连接失败: {e}")
-            return False
+        with self._sock_lock:
+            try:
+                import websocket
+                if self.ws:
+                    try: self.ws.close()
+                    except: pass
+                
+                self.ws = websocket.WebSocket()
+                self.ws.settimeout(self.timeout)
+                self.ws.connect(f"ws://{self.ip}:{self.port}")
+                self.is_connected = True
+                print(f"[WebSocket] 已连接到 ws://{self.ip}:{self.port}")
+                return True
+            except ImportError:
+                print("[WebSocket] 需要安装 websocket-client: pip install websocket-client")
+                return False
+            except Exception as e:
+                self.is_connected = False
+                print(f"[WebSocket] 连接失败: {e}")
+                return False
 
     def close(self):
         """关闭连接"""
         self._running = False
         if self._poll_thread and self._poll_thread.is_alive():
             self._poll_thread.join(timeout=1)
-        if self.ws:
-            try:
-                self.ws.close()
-            except:
-                pass
-        self.is_connected = False
+        
+        with self._sock_lock:
+            if self.ws:
+                try:
+                    self.ws.close()
+                except:
+                    pass
+            self.ws = None
+            self.is_connected = False
         print("[WebSocket] 连接已关闭")
 
     def _pack_header(self, msg_len: int) -> bytes:
@@ -428,47 +440,46 @@ class FollowerClientWebSocket:
             (是否成功, 响应数据)
         """
         if not self.is_connected or not self.ws:
-            print(f"[WebSocket] 未连接，无法发送指令: {command}")
+            # print(f"[WebSocket] 未连接，无法发送指令: {command}")
             return False, None
 
-        try:
-            import websocket
+        with self._sock_lock:
+            try:
+                import websocket
 
-            # 临时设置超时时间
-            if timeout is not None:
-                self.ws.settimeout(timeout)
+                # 临时设置超时时间
+                if timeout is not None:
+                    self.ws.settimeout(timeout)
 
-            payload = command.encode('utf-8')
-            packet = self._pack_header(len(payload)) + payload
-            self.ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
+                payload = command.encode('utf-8')
+                packet = self._pack_header(len(payload)) + payload
+                self.ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
 
-            # 接收响应
-            resp = self.ws.recv()
+                # 接收响应
+                resp = self.ws.recv()
 
-            # 恢复默认超时
-            if timeout is not None:
-                self.ws.settimeout(self.timeout)
+                # 恢复默认超时
+                if timeout is not None:
+                    self.ws.settimeout(self.timeout)
 
-            if len(resp) > 40:
-                data = resp[40:]
-                try:
-                    response = json.loads(data.decode('utf-8'))
-                    ret_code = response.get('ret_code', -1)
-                    ret_msg = response.get('ret_msg', '')
-                    if ret_code == 0:
-                        # print(f"[WebSocket] 指令 '{command}' 执行成功")
-                        pass
-                    else:
-                        print(f"[WebSocket] 指令 '{command}' 返回: code={ret_code}, msg={ret_msg}")
-                    return ret_code == 0, response
-                except json.JSONDecodeError:
-                    print(f"[WebSocket] 指令 '{command}' 响应解析失败")
-                    return False, None
-            return False, None
+                if len(resp) > 40:
+                    data = resp[40:]
+                    try:
+                        response = json.loads(data.decode('utf-8'))
+                        ret_code = response.get('ret_code', -1)
+                        ret_msg = response.get('ret_msg', '')
+                        if ret_code != 0:
+                            print(f"[WebSocket] 指令 '{command}' 返回: code={ret_code}, msg={ret_msg}")
+                        return ret_code == 0, response
+                    except json.JSONDecodeError:
+                        print(f"[WebSocket] 指令 '{command}' 响应解析失败")
+                        return False, None
+                return False, None
 
-        except Exception as e:
-            print(f"[WebSocket] 发送指令 '{command}' 失败: {e}")
-            return False, None
+            except Exception as e:
+                print(f"[WebSocket] 发送指令 '{command}' 失败: {e}")
+                self.is_connected = False # 标记连接已断开
+                return False, None
 
     def check_robot_enabled(self) -> bool:
         """
@@ -600,20 +611,33 @@ class FollowerClientWebSocket:
     def _send_command_no_wait(self, command: str) -> bool:
         """
         发送命令但不等待响应 (用于持续运行的命令如 follower_cart)
+        注：为了维持 WebSocket 协议同步，实际上仍会尝试接收一次响应并丢弃
         """
         if not self.is_connected or not self.ws:
             return False
 
-        try:
-            import websocket
-            payload = command.encode('utf-8')
-            packet = self._pack_header(len(payload)) + payload
-            self.ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
-            print(f"[WebSocket] 已发送指令 '{command}' (不等待响应)")
-            return True
-        except Exception as e:
-            print(f"[WebSocket] 发送指令 '{command}' 失败: {e}")
-            return False
+        with self._sock_lock:
+            try:
+                import websocket
+                payload = command.encode('utf-8')
+                packet = self._pack_header(len(payload)) + payload
+                self.ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
+                
+                # 尝试接收响应以保持同步 (设置极短超时避免阻塞)
+                # 对于某些指令，如果已知没有回包可以跳过，但通常都有
+                try:
+                    self.ws.settimeout(0.1)
+                    self.ws.recv()
+                    self.ws.settimeout(self.timeout)
+                except:
+                    pass
+                
+                # print(f"[WebSocket] 已发送指令 '{command}' (异步模式)")
+                return True
+            except Exception as e:
+                print(f"[WebSocket] 发送指令 '{command}' 失败: {e}")
+                self.is_connected = False
+                return False
 
     def stop_follower_mode(self) -> bool:
         """
@@ -707,24 +731,26 @@ class FollowerClientWebSocket:
         if not self.is_connected or not self.ws:
             return False
 
-        try:
-            import websocket
+        with self._sock_lock:
+            try:
+                import websocket
 
-            # 发送 get 指令
-            payload = b"get"
-            packet = self._pack_header(len(payload)) + payload
-            self.ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
+                # 发送 get 指令
+                payload = b"get"
+                packet = self._pack_header(len(payload)) + payload
+                self.ws.send(packet, opcode=websocket.ABNF.OPCODE_BINARY)
 
-            # 接收响应
-            resp = self.ws.recv()
-            if len(resp) > 40:
-                self._parse_robot_state(resp[40:])
-                return True
-            return False
+                # 接收响应
+                resp = self.ws.recv()
+                if len(resp) > 40:
+                    self._parse_robot_state(resp[40:])
+                    return True
+                return False
 
-        except Exception as e:
-            print(f"[WebSocket] get 指令失败: {e}")
-            return False
+            except Exception as e:
+                # print(f"[WebSocket] get 指令失败: {e}")
+                self.is_connected = False
+                return False
 
     def _parse_robot_state(self, data: bytes):
         """解析机器人状态数据"""

@@ -22,7 +22,7 @@ class RobotModel:
             '#E74C3C', '#F39C12', '#3498DB', '#2ECC71', '#9B59B6', '#1ABC9C', '#E74C3C'
         ]
         
-        # STL 映射关系
+        # STL 映射关系 (已移除 link6 以隐藏法兰盘)
         self.stl_map = {
             "base_link": "base_link.STL",
             "link1": "link1.STL",
@@ -30,7 +30,6 @@ class RobotModel:
             "link3": "link3.STL",
             "link4": "link4.STL",
             "link5": "link5.STL",
-            "link6": "link6.STL",
         }
 
     def load_urdf(self):

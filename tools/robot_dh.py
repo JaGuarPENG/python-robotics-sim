@@ -74,9 +74,6 @@ def create_ka_ur():
     )
     
     # ================= 组装 =================
-    # 注意：ERobot 会自动处理静态链接，不会增加关节自由度 (DOF)
-    # 我们只需要把所有涉及到的 Link (包括 Dummy) 都放进去，或者只放叶子节点让它自动回溯
-    # 最稳妥的方法是把所有定义的 Link 都放进去
     robot = rtb.ERobot(
         [l1, l2, l3, l3_dummy, l4, l5, l5_dummy, l6],
         name="kaanh_ur"

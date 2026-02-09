@@ -13,3 +13,4 @@ class WorkerSignals(QObject):
     command_finished = pyqtSignal(bool, str)  # 命令执行完成 (success, message)
     error_occurred = pyqtSignal(str)   # 错误发生
     robot_status_updated = pyqtSignal(dict)  # 机器人状态更新
+    tracking_error_updated = pyqtSignal(float, float) # (线性误差 mm, 姿态误差 deg)

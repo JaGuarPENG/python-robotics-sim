@@ -98,8 +98,21 @@ class RobotController:
 
     def _monitor_loop(self):
         status_counter = 0
+        reconnect_counter = 0
         while self.is_monitoring:
             try:
+                # 自动重连逻辑
+                if self.ws_client and not self.ws_client.is_connected:
+                    reconnect_counter += 1
+                    if reconnect_counter >= 20: # 约每秒尝试一次
+                        reconnect_counter = 0
+                        print("[RobotController] 检测到连接断开，尝试自动重连...")
+                        if self.ws_client.connect():
+                            if self.state.is_logged_in:
+                                self.login() # 重新登录
+                                if self.state.is_enabled:
+                                    self.enable() # 重新使能
+                
                 client = self.monitor_client if self.monitor_client else self.ws_client
                 if client and client.is_connected and self.state.is_logged_in:
                     client.send_get_status()
@@ -125,17 +138,15 @@ class RobotController:
                             self.signals.robot_status_updated.emit(info)
                 
                 time.sleep(0.05)
-            except: pass
+            except Exception as e:
+                print(f"[RobotController] 监控循环异常: {e}")
+                time.sleep(0.5)
 
     # --- 核心控制方法 ---
 
-    def move_joint(self, target_joints, vels=None):
+    def move_joint(self, target_joints, vels=None, wait_for_finish=True):
         if not self.state.is_enabled:
             self.signals.error_occurred.emit("机器人未使能")
-            return
-
-        if self.state.is_follower_mode:
-            self.signals.error_occurred.emit("跟随模式下无法使用关节运动")
             return
 
         vels = vels or DEFAULT_VEL
@@ -145,9 +156,14 @@ class RobotController:
             vel_inner = ",".join([f"DOUBLE{{{v:.6f}}}" for v in vels])
             cmd = f"manual_mvaj --pos=JointTarget{{UrModel_JointTarget{{{joint_inner}}}}} --vel=Speed{{{vel_inner}}}"
             
-            success, _ = self.ws_client.send_command(cmd, timeout=60)
-            if success:
-                self.signals.status_updated.emit("移动完成")
+            if wait_for_finish:
+                success, _ = self.ws_client.send_command(cmd, timeout=60)
+                if success:
+                    self.signals.status_updated.emit("移动完成")
+            else:
+                # 异步模式：发了就走
+                self.ws_client._send_command_no_wait(cmd)
+                
         except Exception as e:
             self.signals.error_occurred.emit(f"运动异常: {e}")
 
