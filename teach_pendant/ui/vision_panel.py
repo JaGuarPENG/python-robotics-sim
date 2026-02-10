@@ -14,6 +14,7 @@ class VisionPanel(QWidget):
     
     trajectory_generated = pyqtSignal(list)
     execution_requested = pyqtSignal()
+    udp_execution_requested = pyqtSignal()
     actual_export_requested = pyqtSignal()
     
     def __init__(self, parent=None):
@@ -40,12 +41,19 @@ class VisionPanel(QWidget):
         self.load_btn.clicked.connect(self.on_load_clicked)
         v_layout.addWidget(self.load_btn)
 
-        self.execute_btn = QPushButton("第二步：执行运动")
+        self.execute_btn = QPushButton("第二步：执行运动 (IK 模式)")
         self.execute_btn.setMinimumHeight(40)
         self.execute_btn.setEnabled(False)
         self.execute_btn.setStyleSheet("background-color: #c0392b; color: white; font-weight: bold;")
         self.execute_btn.clicked.connect(self.execution_requested.emit)
         v_layout.addWidget(self.execute_btn)
+
+        self.execute_udp_btn = QPushButton("第二步：执行运动 (UDP 增量模式)")
+        self.execute_udp_btn.setMinimumHeight(40)
+        self.execute_udp_btn.setEnabled(False)
+        self.execute_udp_btn.setStyleSheet("background-color: #d35400; color: white; font-weight: bold;")
+        self.execute_udp_btn.clicked.connect(self.on_udp_execution_clicked)
+        v_layout.addWidget(self.execute_udp_btn)
 
         self.export_btn = QPushButton("第三步：导出实际运行 CSV")
         self.export_btn.setMinimumHeight(40)
@@ -75,8 +83,13 @@ class VisionPanel(QWidget):
             if len(points) > 0:
                 self.trajectory_generated.emit(points)
                 self.execute_btn.setEnabled(True)
+                self.execute_udp_btn.setEnabled(True)
                 self.result_label.setText(f"已加载: {len(points)} 个轨迹点")
             else:
                 self.result_label.setText("错误：CSV 文件为空")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"读取 CSV 失败: {str(e)}")
+
+    def on_udp_execution_clicked(self):
+        """点击 UDP 增量执行"""
+        self.udp_execution_requested.emit()

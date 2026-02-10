@@ -159,6 +159,12 @@ class RobotController:
             if wait_for_finish:
                 success, _ = self.ws_client.send_command(cmd, timeout=60)
                 if success:
+                    # 循环检查直到运动停止 (Motion 变为 Stop 或 Idle)
+                    time.sleep(0.5) # 先等指令生效
+                    for _ in range(200): # 最多等待 10s
+                        if self.state.status_info.get('motion') in ['Stop', 'Idle', '--']:
+                            break
+                        time.sleep(0.05)
                     self.signals.status_updated.emit("移动完成")
             else:
                 # 异步模式：发了就走

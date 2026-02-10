@@ -17,6 +17,10 @@ class TrajectoryService:
 
     def run_circular_trajectory(self, center, radius, num_points):
         """执行圆形轨迹"""
+        if not self.controller.state.is_enabled:
+            self.signals.error_occurred.emit("机器人未使能，无法执行轨迹")
+            return []
+
         cx, cy, cz, rx, ry, rz = center
         
         trajectory_points = []

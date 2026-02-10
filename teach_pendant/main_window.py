@@ -140,6 +140,7 @@ class TeachPendantWindow(QMainWindow):
         self.vision_panel = VisionPanel()
         self.vision_panel.trajectory_generated.connect(self.on_vision_trajectory_ready)
         self.vision_panel.execution_requested.connect(self.on_execute_vision_trajectory)
+        self.vision_panel.udp_execution_requested.connect(self.on_execute_vision_trajectory_udp)
         self.vision_panel.actual_export_requested.connect(self.on_save_actual_trajectory)
         vision_layout.addWidget(self.vision_panel)
         vision_layout.addStretch()
@@ -241,6 +242,10 @@ class TeachPendantWindow(QMainWindow):
             QMessageBox.warning(self, "提醒", "请先加载轨迹数据")
             return
         
+        if not self.controller.state.is_enabled:
+            QMessageBox.warning(self, "错误", "机器人未使能，无法执行运动")
+            return
+
         self.actual_trajectory_log = []
         self.robot_view.renderer.clear_actual_path()
         self.is_recording_actual = True
@@ -249,6 +254,108 @@ class TeachPendantWindow(QMainWindow):
             threading.Thread(target=self._run_points_sequence, args=(self.current_vision_trajectory,), daemon=True).start()
         else:
             self.is_recording_actual = False
+
+    def on_execute_vision_trajectory_udp(self):
+        """UDP 模式轨迹执行 (自动对位 + 增量随动)"""
+        if not self.current_vision_trajectory:
+            QMessageBox.warning(self, "提醒", "请先加载轨迹数据")
+            return
+        
+        if not self.controller.state.is_enabled:
+            QMessageBox.warning(self, "错误", "机器人未使能")
+            return
+
+        self.actual_trajectory_log = []
+        self.robot_view.renderer.clear_actual_path()
+        
+        msg = "系统将执行以下操作：\n1. 自动移动到轨迹起点 (IK)\n2. 自动开启跟随模式\n3. 执行 UDP 增量轨迹\n\n是否开始？"
+        if QMessageBox.question(self, "确认执行", msg) == QMessageBox.Yes:
+            # 在后台线程中执行流水线
+            threading.Thread(target=self._run_udp_pipeline, args=(self.current_vision_trajectory,), daemon=True).start()
+
+    def _run_udp_pipeline(self, points):
+        """UDP 自动化流水线：对位 -> 切换 -> 随动"""
+        try:
+            self.signals.status_updated.emit("步骤 1/3: 正在移动到轨迹起点...")
+            p0 = points[0]
+            
+            # 1. 自动对位 (使用 IK)
+            pos_m = [p0[0]/1000.0, p0[1]/1000.0, p0[2]/1000.0]
+            q_rad, _ = self.fast_ik.solve_ik(pos=pos_m, rpy_deg=p0[3:], current_joints=np.deg2rad(self.controller.current_joints))
+            
+            if q_rad:
+                # 移动并等待完成 (使用 WebSocket)
+                self.controller.move_joint(np.rad2deg(q_rad).tolist(), vels=[30,30,30], wait_for_finish=True)
+                time.sleep(0.5)
+            else:
+                self.signals.error_occurred.emit("无法找到起点逆解，对位失败")
+                return
+
+            # 2. 自动启动跟随模式
+            self.signals.status_updated.emit("步骤 2/3: 正在初始化跟随模式...")
+            ip = self.conn_panel.get_ip()
+            # 注意：这里调用 controller 的一键启动逻辑
+            if not self.controller.start_follower_mode(ip):
+                self.signals.error_occurred.emit("跟随模式启动失败")
+                return
+            
+            # 自动连接 UDP (如果未连接)
+            if not self.controller.udp_connected:
+                if not self.controller.connect_udp():
+                    self.signals.error_occurred.emit("UDP 连接失败")
+                    return
+            
+            time.sleep(1.0) # 等待模式切换稳定
+
+            # 3. 开始 UDP 增量执行
+            self.signals.status_updated.emit("步骤 3/3: 开始执行增量轨迹")
+            self.is_recording_actual = True
+            self._run_points_sequence_udp(points)
+            
+        except Exception as e:
+            self.signals.error_occurred.emit(f"流水线执行异常: {e}")
+
+    def _run_points_sequence_udp(self, points):
+        """UDP 增量模式执行逻辑"""
+        print(f"\nUDP 轨迹执行性能报告 (Hz: {self.playback_frequency})")
+        print(f"{'点位':<8} | {'偏移 X(mm)':<12} | {'偏移 Y(mm)':<12} | {'总周期(ms)':<12}")
+        print("-" * 60)
+        
+        target_interval = 1.0 / self.playback_frequency
+        try:
+            # 记录轨迹起始点作为基准 (Origin)
+            # 注意：UDP 跟随模式下，下发的值是相对于机器人进入 follower_cart 瞬间位置的偏移
+            # 我们假设进入模式时机器人刚好在 CSV 的第一个点附近，或者我们下发的是 CSV 内部的相对位移
+            p_start = np.array(points[0])
+            
+            for i, p in enumerate(points):
+                t_loop_start = time.perf_counter()
+                if not self.controller.state.is_enabled or not self.controller.is_follower_mode:
+                    break
+                
+                # 计算相对于轨迹起始点的增量 (单位: mm, deg)
+                p_current = np.array(p)
+                delta = p_current - p_start
+                
+                # 转换单位: mm -> m, deg -> rad
+                dx, dy, dz = delta[:3] / 1000.0
+                drx, dry, drz = np.deg2rad(delta[3:])
+                
+                # 发送位姿 (UDP 协议)
+                # 直接使用 udp_client.send_pose_euler，因为它是绝对增量
+                # 注意：交换 dx 和 dy 以修正坐标系方向
+                self.controller.udp_client.send_pose_euler(dy, dx, -dz, drx, dry, drz)
+                
+                dt_total = (time.perf_counter() - t_loop_start) * 1000
+                if i % 10 == 0:
+                    print(f"{i:<8} | {delta[1]:<12.2f} | {delta[0]:<12.2f} | {dt_total:<12.2f}")
+                
+                time.sleep(max(0, target_interval - (time.perf_counter() - t_loop_start)))
+            
+            self.is_recording_actual = False
+            self.signals.status_updated.emit("UDP 轨迹执行完成")
+        except Exception as e:
+            self.signals.error_occurred.emit(f"UDP 执行异常: {e}")
 
     def _run_points_sequence(self, points):
         """核心轨迹执行算法 (包含实时解算、异步下发与性能计时)"""
@@ -305,6 +412,9 @@ class TeachPendantWindow(QMainWindow):
         self.follower_panel.on_one_click_follower(ip)
 
     def on_move_to_target(self):
+        if not self.controller.state.is_enabled:
+            QMessageBox.warning(self, "错误", "机器人未使能，无法执行运动")
+            return
         target = self.CONTINUOUS_TEST_POINTS[0]
         self.statusBar.showMessage("正在解算 IK...")
         target_joints, ik_time = self.traj_service.move_to_target(target, self.controller.current_joints)
@@ -314,6 +424,9 @@ class TeachPendantWindow(QMainWindow):
         else: QMessageBox.warning(self, "错误", "无法找到逆解")
 
     def on_run_trajectory(self):
+        if not self.controller.state.is_enabled:
+            QMessageBox.warning(self, "错误", "机器人未使能，无法执行轨迹")
+            return
         center = self.CONTINUOUS_TEST_POINTS[0]
         points = self.traj_service.run_circular_trajectory(center, 50.0, 36)
         self.robot_view.set_trajectory(points)
