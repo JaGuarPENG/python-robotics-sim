@@ -333,6 +333,8 @@ class TeachPendantWindow(QMainWindow):
                 if not self.controller.state.is_enabled or not self.controller.is_follower_mode:
                     break
                 
+                self.current_target_point = p
+                
                 # 计算相对于轨迹起始点的增量 (单位: mm, deg)
                 p_current = np.array(p)
                 delta = p_current - p_start
@@ -348,7 +350,7 @@ class TeachPendantWindow(QMainWindow):
                 
                 dt_total = (time.perf_counter() - t_loop_start) * 1000
                 if i % 10 == 0:
-                    print(f"{i:<8} | {delta[1]:<12.2f} | {delta[0]:<12.2f} | {dt_total:<12.2f}")
+                    print(f"{i:<8} | {delta[0]:<12.2f} | {delta[1]:<12.2f} | {dt_total:<12.2f}")
                 
                 time.sleep(max(0, target_interval - (time.perf_counter() - t_loop_start)))
             
