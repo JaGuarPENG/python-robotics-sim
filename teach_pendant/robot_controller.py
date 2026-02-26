@@ -176,7 +176,7 @@ class RobotController:
     def jog_joint(self, joint_index, direction, step):
         target = self.state.get_joints()
         target[joint_index] += direction * step
-        self.move_joint(target)
+        self.move_joint(target, wait_for_finish=False)
 
     def set_velocity(self, percent):
         if self.ws_client:

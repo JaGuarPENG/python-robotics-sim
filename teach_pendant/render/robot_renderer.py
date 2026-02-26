@@ -19,7 +19,8 @@ class RobotRenderer:
 
     def setup_base_scene(self):
         self.plotter.add_axes()
-        grid = pv.Plane(i_size=1.2, j_size=1.2)
+        # 创建一个 50m x 50m 的超大网格，并设置较高的分辨率保持每个网格的间距合理
+        grid = pv.Plane(i_size=50, j_size=50, i_resolution=250, j_resolution=250)
         self.plotter.add_mesh(grid, color='#2c3e50', opacity=0.5, show_edges=True)
 
     def create_robot_actors(self):

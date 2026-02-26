@@ -38,7 +38,7 @@ class Robot3DWidget(QWidget):
         self.renderer.setup_base_scene()
         
         # 相机初始位姿
-        self.plotter.camera_position = [(1.2, -1.2, 0.8), (0, 0, 0.3), (0, 0, 1)]
+        self.plotter.camera_position = [(3.68, -2.21, 3.34), (0.00, 0.00, 0.30), (-0.43, 0.41, 0.81)]
         self.plotter.enable_anti_aliasing()
 
     def update_robot(self, joints_deg):
@@ -61,7 +61,7 @@ class Robot3DWidget(QWidget):
         return "精细模型" if new_mode == 1 else "简化模型"
 
     def reset_view(self):
-        self.plotter.camera_position = [(1.2, -1.2, 0.8), (0, 0, 0.3), (0, 0, 1)]
+        self.plotter.camera_position = [(3.68, -2.21, 3.34), (0.00, 0.00, 0.30), (-0.43, 0.41, 0.81)]
         self.plotter.reset_camera()
 
     def set_test_waypoints(self, waypoints):

@@ -358,6 +358,9 @@ class TeachPendantWindow(QMainWindow):
             self.signals.status_updated.emit("UDP 轨迹执行完成")
         except Exception as e:
             self.signals.error_occurred.emit(f"UDP 执行异常: {e}")
+        finally:
+            self.signals.status_updated.emit("正在自动关闭跟随模式...")
+            self.controller.cmd_stop_follower()
 
     def _run_points_sequence(self, points):
         """核心轨迹执行算法 (包含实时解算、异步下发与性能计时)"""
