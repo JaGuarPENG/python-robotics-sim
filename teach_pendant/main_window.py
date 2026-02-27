@@ -61,18 +61,29 @@ class TeachPendantWindow(QMainWindow):
         # self.test_tracking_timer.timeout.connect(self._debug_print_tracking)
         # self.test_tracking_timer.start(500) # 每0.5秒打印一次
         
-        # [PHASE 2 TEST] 我们在界面上绑定一个按键，或者直接延迟3秒启动测试服务
-        self.phase2_test_timer = QTimer(self)
-        self.phase2_test_timer.setSingleShot(True)
-        self.phase2_test_timer.timeout.connect(self.tracking_service.start_tracking)
-        self.phase2_test_timer.start(3000)
-
     def _debug_print_tracking(self):
         # 通过 robot_view (Robot3DWidget) 获取其内部的 renderer
         if hasattr(self.robot_view, 'renderer') and self.robot_view.renderer:
             target, target_id = self.robot_view.renderer.get_tracking_target()
             if target is not None:
                 print(f"[阶段一验证] 锁定目标 ID={target_id}: X={target[0]:.3f}, Y={target[1]:.3f}, Z={target[2]:.3f}")
+
+    def _on_conveyor_tracking_toggled(self, checked):
+        """处理来自 VisionPanel 的追踪开关请求"""
+        if checked:
+            # 只有在机器人使能的情况下才允许真正追踪
+            if not self.controller.state.is_enabled:
+                QMessageBox.warning(self, "警告", "机器人未使能，请先连接并使能机器人！")
+                # 强制将按钮状态改回去 (不触发信号递归)
+                self.vision_panel.tracking_btn.blockSignals(True)
+                self.vision_panel.tracking_btn.setChecked(False)
+                self.vision_panel.on_tracking_toggled(False)
+                self.vision_panel.tracking_btn.blockSignals(False)
+                return
+
+            self.tracking_service.start_tracking()
+        else:
+            self.tracking_service.stop_tracking()
 
     def init_ui(self):
         """初始化 UI 布局"""
@@ -153,6 +164,7 @@ class TeachPendantWindow(QMainWindow):
         self.vision_panel.execution_requested.connect(self.on_execute_vision_trajectory)
         self.vision_panel.udp_execution_requested.connect(self.on_execute_vision_trajectory_udp)
         self.vision_panel.actual_export_requested.connect(self.on_save_actual_trajectory)
+        self.vision_panel.conveyor_tracking_toggled.connect(self._on_conveyor_tracking_toggled)
         vision_layout.addWidget(self.vision_panel)
         vision_layout.addStretch()
         self.tabs.addTab(vision_tab, "视觉引导")

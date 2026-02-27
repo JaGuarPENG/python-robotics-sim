@@ -16,6 +16,7 @@ class VisionPanel(QWidget):
     execution_requested = pyqtSignal()
     udp_execution_requested = pyqtSignal()
     actual_export_requested = pyqtSignal()
+    conveyor_tracking_toggled = pyqtSignal(bool)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -68,6 +69,37 @@ class VisionPanel(QWidget):
         v_layout.addWidget(self.result_label)
 
         layout.addWidget(group)
+
+        # --- 新增：动态传送带追踪区 ---
+        dynamic_group = QGroupBox("动态追踪与触碰 (30Hz)")
+        d_layout = QVBoxLayout(dynamic_group)
+
+        self.tracking_btn = QPushButton("启动传送带动态追踪")
+        self.tracking_btn.setMinimumHeight(45)
+        self.tracking_btn.setCheckable(True) # 使其成为开关按钮
+        self.tracking_btn.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold;")
+        self.tracking_btn.clicked.connect(self.on_tracking_toggled)
+        d_layout.addWidget(self.tracking_btn)
+
+        self.tracking_status = QLabel("状态：停止")
+        self.tracking_status.setStyleSheet("color: #bdc3c7; font-size: 11px;")
+        d_layout.addWidget(self.tracking_status)
+
+        layout.addWidget(dynamic_group)
+        layout.addStretch()
+
+    def on_tracking_toggled(self, checked):
+        """处理追踪按钮切换"""
+        if checked:
+            self.tracking_btn.setText("停止追踪")
+            self.tracking_btn.setStyleSheet("background-color: #e67e22; color: white; font-weight: bold;")
+            self.tracking_status.setText("状态：运行中 (30Hz)")
+        else:
+            self.tracking_btn.setText("启动传送带动态追踪")
+            self.tracking_btn.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold;")
+            self.tracking_status.setText("状态：停止")
+        
+        self.conveyor_tracking_toggled.emit(checked)
 
     def on_load_clicked(self):
         """打开文件对话框选择并加载 CSV 轨迹"""
