@@ -141,6 +141,25 @@ class RobotRenderer:
         T_ee_disp[:3, 3] = ee_pos_disp
         self.fov_actor.user_matrix = T_ee_disp
 
+        # 4. FOV Detection: check if belt centers are inside
+        T_inv = np.linalg.inv(T_ee_disp)
+        for i, center_actor in enumerate(self.belt_centers):
+            world_pos = np.array([0.6, self.obj_y_coords[i], 0.211, 1.0])
+            local_pos = T_inv @ world_pos
+            lx, ly, lz = local_pos[:3]
+            
+            # Check 60deg FOV pyramid (depth 0.5m, tan(30)=0.56)
+            is_inside = False
+            if 0 < lz < 0.5:
+                limit = 0.56 * lz
+                if abs(lx) < limit and abs(ly) < limit:
+                    is_inside = True
+            
+            if is_inside:
+                center_actor.GetProperty().SetColor(0.0, 1.0, 0.0)
+            else:
+                center_actor.GetProperty().SetColor(1.0, 1.0, 1.0)
+
         axes = [ee_rot[:, 0], ee_rot[:, 1], ee_rot[:, 2]]
         for i, (actor, direction) in enumerate(zip(self.ee_frame_actors, axes)):
             new_line = pv.Line(ee_pos_disp, ee_pos_disp + 0.08 * direction)
@@ -170,3 +189,9 @@ class RobotRenderer:
     def clear_trajectory(self):
         for a in self.trajectory_actors: self.plotter.remove_actor(a)
         self.trajectory_actors = []
+
+    def set_fov_visibility(self, visible):
+        """Toggle camera FOV visibility"""
+        if self.fov_actor:
+            self.fov_actor.SetVisibility(visible)
+            self.plotter.render()

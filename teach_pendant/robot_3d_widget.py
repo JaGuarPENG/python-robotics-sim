@@ -49,6 +49,10 @@ class Robot3DWidget(QWidget):
         """外部接口：设置轨迹线"""
         self.renderer.set_trajectory(points_mm)
 
+    def set_fov_visible(self, visible):
+        """外部接口：设置视野范围可见性"""
+        self.renderer.set_fov_visibility(visible)
+
     def clear_trajectory(self):
         self.renderer.clear_trajectory()
 

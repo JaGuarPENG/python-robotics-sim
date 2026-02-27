@@ -87,6 +87,13 @@ class TeachPendantWindow(QMainWindow):
         reset_view_btn.clicked.connect(self.robot_view.reset_view)
         view_btn_layout.addWidget(reset_view_btn)
         
+        # FOV Toggle
+        from PyQt5.QtWidgets import QCheckBox
+        self.fov_toggle = QCheckBox("显示摄像头视野")
+        self.fov_toggle.setChecked(True)
+        self.fov_toggle.stateChanged.connect(lambda state: self.robot_view.set_fov_visible(state == Qt.Checked))
+        view_btn_layout.addWidget(self.fov_toggle)
+
         self.move_target_btn = QPushButton("移动至目标点 (IK)")
         self.move_target_btn.setStyleSheet("background-color: #e67e22; color: white;")
         self.move_target_btn.clicked.connect(self.on_move_to_target)
