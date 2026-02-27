@@ -52,6 +52,18 @@ class TeachPendantWindow(QMainWindow):
         self.view_timer.timeout.connect(self.update_3d_view)
         self.view_timer.start(33)
 
+        # [PHASE 1 TEST] 定时打印当前锁定的绿色小球坐标
+        self.test_tracking_timer = QTimer(self)
+        self.test_tracking_timer.timeout.connect(self._debug_print_tracking)
+        self.test_tracking_timer.start(500) # 每0.5秒打印一次
+
+    def _debug_print_tracking(self):
+        # 通过 robot_view (Robot3DWidget) 获取其内部的 renderer
+        if hasattr(self.robot_view, 'renderer') and self.robot_view.renderer:
+            target, target_id = self.robot_view.renderer.get_tracking_target()
+            if target is not None:
+                print(f"[阶段一验证] 锁定目标 ID={target_id}: X={target[0]:.3f}, Y={target[1]:.3f}, Z={target[2]:.3f}")
+
     def init_ui(self):
         """初始化 UI 布局"""
         self.setWindowTitle("机器人示教器 - Teach Pendant (Industrial FS)")

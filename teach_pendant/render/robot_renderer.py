@@ -22,6 +22,7 @@ class RobotRenderer:
         # --- Conveyor objects properties ---
         self.belt_objects = []
         self.belt_centers = []
+        self.belt_states = [0] * 10  # 0: WAITING (white), 1: TRACKING (green), 2: REACHED (red)
         self.belt_speed = 0.1  # 0.1 m/s
         self.last_time = time.time()
         self.obj_y_coords = np.linspace(-2.5, 2.5, 10, endpoint=False)
@@ -110,6 +111,8 @@ class RobotRenderer:
             self.obj_y_coords[i] += dy
             if self.obj_y_coords[i] > 2.5:
                 self.obj_y_coords[i] -= 5.0
+                self.belt_states[i] = 0
+                self.belt_centers[i].GetProperty().SetColor(1.0, 1.0, 1.0)
             
             T = np.eye(4)
             T[0, 3] = 0.6
@@ -143,7 +146,13 @@ class RobotRenderer:
 
         # 4. FOV Detection: check if belt centers are inside
         T_inv = np.linalg.inv(T_ee_disp)
+        has_tracking = any(s == 1 for s in self.belt_states)
+
         for i, center_actor in enumerate(self.belt_centers):
+            # If already reached, keep it red
+            if self.belt_states[i] == 2:
+                continue
+
             world_pos = np.array([0.6, self.obj_y_coords[i], 0.211, 1.0])
             local_pos = T_inv @ world_pos
             lx, ly, lz = local_pos[:3]
@@ -156,9 +165,15 @@ class RobotRenderer:
                     is_inside = True
             
             if is_inside:
-                center_actor.GetProperty().SetColor(0.0, 1.0, 0.0)
+                if self.belt_states[i] == 0 and not has_tracking:
+                    self.belt_states[i] = 1
+                    has_tracking = True
+                    center_actor.GetProperty().SetColor(0.0, 1.0, 0.0)
             else:
-                center_actor.GetProperty().SetColor(1.0, 1.0, 1.0)
+                if self.belt_states[i] == 1:
+                    self.belt_states[i] = 0
+                    has_tracking = False
+                    center_actor.GetProperty().SetColor(1.0, 1.0, 1.0)
 
         axes = [ee_rot[:, 0], ee_rot[:, 1], ee_rot[:, 2]]
         for i, (actor, direction) in enumerate(zip(self.ee_frame_actors, axes)):
@@ -195,3 +210,19 @@ class RobotRenderer:
         if self.fov_actor:
             self.fov_actor.SetVisibility(visible)
             self.plotter.render()
+
+    def get_tracking_target(self):
+        """Returns the world coordinates [X, Y, Z] and ID of the currently tracked (green) ball, or (None, None)."""
+        for i, state in enumerate(self.belt_states):
+            if state == 1:
+                return np.array([0.6, self.obj_y_coords[i], 0.211]), i
+        return None, None
+
+    def mark_target_reached(self):
+        """Marks the currently tracked ball as reached (red)."""
+        for i, state in enumerate(self.belt_states):
+            if state == 1:
+                self.belt_states[i] = 2
+                self.belt_centers[i].GetProperty().SetColor(1.0, 0.0, 0.0)
+                return True
+        return False
