@@ -26,20 +26,21 @@ class ConveyorTrackingService(QObject):
         # === 状态机变量 ===
         self.last_target_id = None
         self.state = "OBSERVING"  # OBSERVING, HOVERING, APPROACHING, RETURNING
+        self.hover_count = 0      # [新增] 悬停稳定计数器
         
         # === 运动控制参数 ===
         self.tool_length = 0.20         # [新增] 20cm 探针长度 (m)
-        self.hover_height = 0.20        # m (探针尖端距离小球高度)
-        self.target_z_surface = 0.211   # m (小球表面高度Z)
+        self.hover_height = 0.10        # m (探针尖端距离小球高度)
+        self.target_z_surface = 0.211   # m (小球表面真实高度Z)
         self.current_z_target = self.target_z_surface + self.hover_height  # 当前探针尖端目标高度
         
         self.approach_speed_z = 0.05    # Z轴逼近/复位速度: 0.05m/s (50mm/s)
         self.conveyor_speed_y = 0.05    # [优化] 传送带默认速度: 0.05m/s
-        self.xy_threshold = 0.04        # [优化] 水平误差阈值放宽至 4cm，增加锁定成功率
+        self.xy_threshold = 0.010       # [优化] 水平误差阈值 10mm
         
         # === 动态前馈参数 ===
-        self.look_ahead_frames = 3.0    # [优化] 预瞄 3 帧 (约 100ms) 补偿系统延迟
-        self.intercept_lead_y = 0.02    # [优化] Y轴额外增加 2cm 截击提前量
+        self.look_ahead_frames = 1.5    # [优化] 增加预瞄帧数至 1.5，补偿下压过程中的动态滞后
+        self.intercept_lead_y = 0.0     # [优化] 彻底移除人工提前量，直接瞄准球心
         
         # === 初始位置 (快速定位1) ===
         self.home_joints = [0, -15, 105, 0, -90, 0] # 角度
@@ -85,6 +86,7 @@ class ConveyorTrackingService(QObject):
                 if self.last_target_id != target_id:
                     self.last_target_id = target_id
                     self.state = "HOVERING"
+                    self.hover_count = 0  # 重置计数
                     self.current_z_target = target_pos[2] + self.hover_height
                     print(f"\n--- [状态机] 发现新目标 ID={target_id}，进入 HOVERING (悬停同步) ---")
 
@@ -108,16 +110,45 @@ class ConveyorTrackingService(QObject):
                 # ==========================
                 if self.state == "HOVERING":
                     self.current_z_target = target_pos[2] + self.hover_height
-                    # [优化] 只要距离在 4cm 以内，即刻开始下压
-                    if real_xy_distance < self.xy_threshold:
-                        print(f"--- [状态机] 目标已截获 (误差 {real_xy_distance*100:.1f}cm < 4cm)，进入 APPROACHING ---")
+                    
+                    # 获取实际高度用于辅助判定
+                    tcp_mm_cur = self.controller.state.get_tcp()
+                    actual_tip_z_cur = (tcp_mm_cur[2] / 1000.0) - self.tool_length
+                    
+                    # 判定条件：水平对准且高度已降到悬停位附近 (放宽至 70mm 以兼容 50mm 坐标偏置)
+                    if real_xy_distance < self.xy_threshold and abs(actual_tip_z_cur - self.current_z_target) < 0.070:
+                        self.hover_count += 1
+                    else:
+                        self.hover_count = 0
+                    
+                    # 必须连续 5 帧稳定对准才开始下压 (约 150ms)
+                    if self.hover_count >= 5:
+                        print(f"--- [状态机] 目标已稳定截获 (计数={self.hover_count})，进入 APPROACHING ---")
                         self.state = "APPROACHING"
+                        self.hover_count = 0
 
                 elif self.state == "APPROACHING":
+                    # 递减目标高度，稍微下穿表面以抵消机械静差
                     self.current_z_target -= self.approach_speed_z * self.loop_interval
-                    if self.current_z_target <= self.target_z_surface:
-                        self.current_z_target = self.target_z_surface
-                        print(f"--- [状态机] 已触碰小球表面，进入 RETURNING (复位) ---")
+                    if self.current_z_target < self.target_z_surface - 0.010:
+                        self.current_z_target = self.target_z_surface - 0.010
+                    
+                    # 获取实际探针尖端高度 (m)
+                    tcp_mm = self.controller.state.get_tcp()
+                    actual_tip_z = (tcp_mm[2] / 1000.0) - self.tool_length
+                    
+                    # 【核心修正】判定门槛增加 50mm 补偿
+                    # 视觉表面在 0.211，但机器人物理反馈在 0.261 左右即为触碰
+                    if actual_tip_z <= 0.265:
+                        # 触碰瞬间，重新获取最实时的球位置进行对比
+                        latest_target_pos, _ = self.robot_view.renderer.get_tracking_target()
+                        if latest_target_pos is None: latest_target_pos = target_pos
+
+                        final_err_x = (tcp_mm[0]/1000.0) - latest_target_pos[0]
+                        final_err_y = (tcp_mm[1]/1000.0) - latest_target_pos[1]
+                        final_dist_mm = math.sqrt(final_err_x**2 + final_err_y**2) * 1000.0
+                        
+                        print(f"--- [状态机] 已触碰小球表面，最终误差: {final_dist_mm:.2f}mm (X:{final_err_x*1000:.1f}, Y:{final_err_y*1000:.1f}) ---")
                         self.state = "RETURNING"
                         self.robot_view.renderer.mark_target_reached()
 
@@ -155,8 +186,11 @@ class ConveyorTrackingService(QObject):
                         target_joints_deg = np.rad2deg(target_q_rad).tolist()
                         self.controller.move_joint(target_joints_deg, vels=[100]*6, wait_for_finish=False)
                         
-                        if int(loop_start_time * 10) % 10 == 0: 
-                            print(f"[{self.state}] 探针尖端Z:{self.current_z_target:.3f}m | 实际XY误差:{real_xy_distance*100:.1f}cm")
+                        # 仅在悬停和逼近阶段打印实时误差，复位离开阶段不打印
+                        if self.state in ["HOVERING", "APPROACHING"] and int(loop_start_time * 10) % 10 == 0: 
+                            tcp_mm = self.controller.state.get_tcp()
+                            actual_tip_z = (tcp_mm[2] / 1000.0) - self.tool_length
+                            print(f"[{self.state}] 目标Z:{self.current_z_target:.3f}m | 实际尖端Z:{actual_tip_z:.3f}m | XY误差:{real_xy_distance*1000.0:.1f}mm")
                     else:
                         print(f"[{self.state}] 警告: IK解算失败")
 
