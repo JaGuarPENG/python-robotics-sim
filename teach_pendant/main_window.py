@@ -68,6 +68,16 @@ class TeachPendantWindow(QMainWindow):
             if target is not None:
                 print(f"[阶段一验证] 锁定目标 ID={target_id}: X={target[0]:.3f}, Y={target[1]:.3f}, Z={target[2]:.3f}")
 
+    def _on_conveyor_speed_changed(self, speed):
+        """同步更新渲染器和追踪服务的传送带速度"""
+        if hasattr(self.robot_view, 'renderer') and self.robot_view.renderer:
+            self.robot_view.renderer.belt_speed = speed
+        
+        if hasattr(self, 'tracking_service'):
+            self.tracking_service.set_conveyor_speed(speed)
+        
+        self.statusBar.showMessage(f"传送带速度已调整为: {speed} m/s")
+
     def _on_conveyor_tracking_toggled(self, checked):
         """处理来自 VisionPanel 的追踪开关请求"""
         if checked:
@@ -165,6 +175,7 @@ class TeachPendantWindow(QMainWindow):
         self.vision_panel.udp_execution_requested.connect(self.on_execute_vision_trajectory_udp)
         self.vision_panel.actual_export_requested.connect(self.on_save_actual_trajectory)
         self.vision_panel.conveyor_tracking_toggled.connect(self._on_conveyor_tracking_toggled)
+        self.vision_panel.conveyor_speed_changed.connect(self._on_conveyor_speed_changed)
         vision_layout.addWidget(self.vision_panel)
         vision_layout.addStretch()
         self.tabs.addTab(vision_tab, "视觉引导")

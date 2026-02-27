@@ -23,7 +23,7 @@ class RobotRenderer:
         self.belt_objects = []
         self.belt_centers = []
         self.belt_states = [0] * 10  # 0: WAITING (white), 1: TRACKING (green), 2: REACHED (red)
-        self.belt_speed = 0.1  # 0.1 m/s
+        self.belt_speed = 0.05  # Default 0.05 m/s
         self.last_time = time.time()
         self.obj_y_coords = np.linspace(-2.5, 2.5, 10, endpoint=False)
 
@@ -99,6 +99,11 @@ class RobotRenderer:
         fov_mesh = pv.PolyData(points, faces)
         self.fov_actor = self.plotter.add_mesh(fov_mesh, color='#3498db', opacity=0.3, show_edges=True, edge_color='#ecf0f1')
 
+        # 4. End-effector Probe (20cm tool)
+        # Create a thin cylinder: radius 5mm, length 200mm
+        probe_geom = pv.Cylinder(center=(0, 0, 0.1), direction=(0, 0, 1), radius=0.005, height=0.2)
+        self.probe_actor = self.plotter.add_mesh(probe_geom, color='#f1c40f', smooth_shading=True)
+
     def update(self, joints_rad):
         """全量更新 (包含模型、坐标轴与传送带物体，并应用 50mm 下沉)"""
         # Update belt objects positions (looping)
@@ -143,8 +148,12 @@ class RobotRenderer:
         T_ee_disp[:3, :3] = ee_rot
         T_ee_disp[:3, 3] = ee_pos_disp
         self.fov_actor.user_matrix = T_ee_disp
+        
+        # 4. Update Probe pose
+        if hasattr(self, 'probe_actor'):
+            self.probe_actor.user_matrix = T_ee_disp
 
-        # 4. FOV Detection: check if belt centers are inside
+        # 5. FOV Detection: check if belt centers are inside
         T_inv = np.linalg.inv(T_ee_disp)
         has_tracking = any(s == 1 for s in self.belt_states)
 

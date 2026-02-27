@@ -1,0 +1,176 @@
+遥操作使⽤说明
+上位机控制程序demo
+v2.5.7xml示例
+配置
+1. 新增规划器，设置要控制的关节和末端
+复制代码
+2. 跟随模块配置笛卡尔和关节跟随的tg_id号以及通讯设置
+复制代码
+follower_demo.zip
+kaanh.xml
+<kaanh.multi_motion.MultiModelControl
+name="kaanh::multi_motion::MultiModelControl" is_use_sp="false"
+is_check_solve="true">
+ <kaanh.AccDecJerkLimit __prop_name__="acc_dec_jerk_limit" joint_jerk="10"
+cart_line_acc="2.5" cart_line_jerk="10" cart_angle_acc="2.5" cart_angle_jerk="10"
+/>
+ <kaanh.SpeedLimit __prop_name__="speed_limit" v_tcp_max="6" v_tcp_min="0"
+w_tcp_max="12.56637061435917246" w_tcp_min="0"
+max_manual_line_speed="0.20000000000000001" max_manual_angle_speed_per="30" />
+ <kaanh.ZoneLimit __prop_name__="zone_limit" dis_max="0.10000000000000001"
+dis_min="0" per_max="0.5" per_min="0" />
+ <kaanh.CouplingConfig __prop_name__="coupling_config" is_coupling="false"
+type="ToolTool" />
+ <TgConfigVec __prop_name__="tg_config_vec">
+ <!-- 多模型下如果需要控制部分末端，在这里新增配置 -->
+ <!-- 如果要控制所有末端，不需要修改 -->
+ <kaanh.TgConfig tg_id="0" is_cart="false" ee_ids="{0,1,2,3,4,5}" />
+ <kaanh.TgConfig tg_id="1" is_cart="true" ee_ids="{0}" />
+ </TgConfigVec>
+</kaanh.multi_motion.MultiModelControl>
+<!-- 使用socket通讯 支持TCP UDP WEB三种方式 -->
+<UDPFollower name="UDPFollower">
+ <FollowerParamPool __prop_name__="follower_param_pool">
+ <FollowerAjParam tg_id="0">
+ <SocketServer __prop_name__="socket_server" connect_type="UDP"
+port="9999" />
+ </FollowerAjParam>
+ <FollowerCartParam tg_id="1">
+ <SocketServer __prop_name__="socket_server" connect_type="UDP"
+port="9998" />
+1 / 5
+状态获取
+前端下发get指令
+get返回示例 复制代码
+ </FollowerCartParam>
+ </FollowerParamPool>
+</UDPFollower>
+●
+返回值中包含 ●
+ret_code
+ret_msg
+ret_context
+○
+○
+○
+ret_context中"follower_msg"节点为跟随模块返回值，具体包括 ●
+running_state：当前是否在跟随
+follower_mode：当前跟随的模式：笛卡尔&关节
+○
+○
+{"ret_code":0,"ret_context":"{\"area_msg\":{\"states\":
+[{\"active\":false,\"captured\":false,\"control\":false,\"type\":\"None\"},
+{\"active\":false,\"captured\":false,\"control\":false,\"type\":\"None\"},
+{\"active\":false,\"captured\":false,\"control\":false,\"type\":\"None\"},
+{\"active\":false,\"captured\":false,\"control\":false,\"type\":\"None\"},
+{\"active\":false,\"captured\":false,\"control\":false,\"type\":\"None\"},
+{\"active\":false,\"captured\":false,\"control\":false,\"type\":\"None\"},
+{\"active\":false,\"captured\":false,\"control\":false,\"type\":\"None\"},
+{\"active\":false,\"captured\":false,\"control\":false,\"type\":\"None\"}]},\"conve
+yor_msg\":{\"catch_size\":0,\"miss_que_size\":[[0]],\"miss_size\":0,\"net_state\":
+[false],\"photo_size\":0,\"pos\":[0.0],\"que_size\":[[0]],\"state\":
+[false],\"vel\":[0.0]},\"current_msg\":{\"collision_detection_sensitivity\":
+[10.0,10.0,10.0,10.0,10.0,10.0],\"collision_detection_state\":
+[0.0],\"collision_detection_switch\":false,\"cur_status\":false},\"driver_data_msg\
+":{\"value\":[[262142.0,0.0,0.0,0.0],[262140.99999999997,0.0,0.0,0.0],
+[262145.0,-0.0,0.0,0.0],[262140.0,0.0,0.0,0.0],[262144.0,0.0,0.0,0.0],
+[262145.0,0.0,0.0,0.0]],\"value_info\":[[[262142.0,262142.0,262142.0],
+[0.0,0.0,0.0],[0.0,0.0,0.0],[0.0,0.0,0.0]],
+[[262140.99999999997,262140.99999999997,262140.99999999997],[0.0,0.0,0.0],
+[0.0,0.0,0.0],[0.0,0.0,0.0]],[[262145.0,262145.0,262145.0],[-0.0,-0.0,-0.0],
+[0.0,0.0,0.0],[0.0,0.0,0.0]],[[262140.0,262140.0,262140.0],[0.0,0.0,0.0],
+[0.0,0.0,0.0],[0.0,0.0,0.0]],[[262144.0,262144.0,262144.0],[0.0,0.0,0.0],
+[0.0,0.0,0.0],[0.0,0.0,0.0]],[[262145.0,262145.0,262145.0],[0.0,0.0,0.0],
+[0.0,0.0,0.0],[0.0,0.0,0.0]]]},\"driver_msg\":{\"driver_break_ready\":
+[true,true,true,true,true,true],\"driver_err_code\":
+[0,0,0,0,0,0]},\"external_auto_msg\":
+{\"servoConfirm_shield\":false},\"follower_msg\":
+{\"follower_mode\":\"None\",\"running_state\":false},\"force_msg\":{\"fc_status\":
+2 / 5
+[],\"fs_binded_ee\":[],\"fs_car_data\":[],\"fs_protection_switch\":
+[],\"fs_raw_data\":[],\"fs_switch\":[],\"fsg_status\":false,\"fsl_id\":
+[]},\"io_msg\":{\"digital\":[[\"Actual\",
+[false,false,false,false,false,false,false,false,false,false,false,false,false,fals
+e,false,false],
+[false,false,false,false,false,false,false,false,false,false,false,false,false,fals
+e,false,false]]]},\"log_msg\":
+{\"has_error\":false,\"id\":4,\"state_id\":0},\"motion_msg\":{\"actual_pos\":
+[[0.0,0.0,0.0,0.0,0.0,0.0]],\"actual_toq\":
+[[0.0,0.0,0.0,0.0,0.0,0.0]],\"jog_coordinate\":\"Axis\",\"jog_coupling_ids\":
+[0],\"jog_coupling_mode\":\"JogEe\",\"jog_mode\":
+{\"run_mode\":\"Continuous\",\"step\":[0.0,0.0]},\"jog_vel\":10,\"motion_state\":
+[true,true,true,true,true,true],\"motor_pos\":
+[[0.0,0.0,0.0,0.0,0.0,0.0]],\"part_pq\":[[[0.0,0.0,0.0,0.0,0.0,0.0,1.0],
+[0.0,0.0,0.0,0.0,0.0,-0.0,1.0],[0.0,0.0,0.0,0.0,0.0,-0.0,1.0],
+[0.0,0.0,0.0,0.0,0.0,-0.0,1.0],[0.0,0.0,0.0,0.0,0.0,-0.0,1.0],
+[0.0,0.0,0.0,0.0,0.0,-0.0,1.0],[-5.8031691057605634e-12,-5.218048215738236e-
+12,6.661338147750939e-13,-1.745740669421564e-15,1.7457406694215694e-
+15,-1.6155445744325899e-15,1.0]]],\"pe\":
+[[0.0,181.10000000000002,1494.5,44.99999999999991,-89.99999999999972,224.9999999999
+999]],\"pe_config\":[[0,0,0,-1]],\"pe_vel\":[0.0,0.0],\"pq\":
+[[0.0,181.10000000000002,1494.5,-0.5000000000000027,-0.4999999999999991,-0.49999999
+99999991,0.4999999999999991]]},\"pallet_msg\":{\"count\":[1],\"serial_num\":
+[0]},\"program_msg\":{\"is_edited\":false,\"last_stopped_motor_pos\":
+[],\"loaded_info\":[\"\",\"\"],\"loop_stack\":[],\"mode\":\"Continuous\",\"pc\":
+[\"\",0],\"run_direction\":\"Forward\",\"state\":\"Unloaded\",\"stmt_state\":\"None
+\",\"vel\":50},\"protocol_msg\":{\"mtcp_slave\":
+{\"has_connected\":false,\"is_serving\":true}},\"robot_msg\":
+{\"activate\":\"Disabled\",\"cs_error_code\":0,\"cs_error_msg\":\"\",\"motion\":\"S
+topped\",\"op_mode\":\"Manual\",\"status\":\"Normal\",\"tool\":[0],\"tool_mode\":
+[\"Tool\"],\"wobj\":[0]},\"splc_msg\":
+{\"selected_prj\":\"\",\"state\":\"Unloaded\"},\"system_sema_msg\":
+{\"gate_shield\":false,\"modbus_disconnect_shield\":true,\"raster_shield\":false},\
+"user_management_msg\":
+{\"user\":\"Engineer\"} \"user slave msg\":null}" "ret msg":""}
+跟随控制指令
+1. start_follower：开始跟随功能
+2. stop_follower:关闭跟随功能
+3. follower_aj:运⾏轴关节跟随指令
+4. follower_cart:运⾏笛卡尔跟随指令
+笛卡尔
+1. 跟随⽅式：跟随最新位置
+2. 跟随速度：
+a. 最⼤跟随速度：点动笛卡尔设置的速度
+3 / 5
+指令格式示例 复制代码
+关节
+1. 跟随⽅式：跟随最新的位置
+其他辅助指令
+1. 登录登出
+复制代码
+2. 使能
+b. 调速：最⼤跟随速度*速度百分⽐
+3. 指令格式：json格式字符串
+a. 单位：⽶和弧度
+b. 值：下发增量值
+c. 多模型下下发⼆维数组 pe：6维 pq:7维
+// pe 和 pq按实际点位类型选择
+nlohmann::json j;
+std::vector<std::vector<double>> pes,pqs;
+std::vector<double> pe{ 0.10,0,0,0,0,0 };
+std::vector<double> pq{ 0,0,0,0,0,0,1 };
+pes.push_back(pe);
+j["type"] = "321"; // 支持 321 123 313
+j["pe"] = pes;
+j["pq"] = pqs;
+2. 跟随速度：
+a. 最⼤跟随速度：关节最⼤速度的10%
+b. 调速：最⼤跟随速度*速度百分⽐
+3. 指令格式：jp --motor_pos=[0,-5,90,10,-100,0]
+a. 单位：度和毫⽶
+b. 值：关节绝对位置
+// 登录
+login --user=Engineer --pwd=000000
+// 登出
+logout
+4 / 5
+复制代码
+虚拟模式：使能：manual_en 掉使能：manual_ds
+真机模式: 使能：en 掉使能：ds 
+3. 调速指令
+复制代码
+// 设置自动模式速度百分比
+set_pgm_vel --vel_percent=60
+// 设置手动模式速度百分比
+set_jog_vel --vel_percent=60
+5 / 5

@@ -3,7 +3,7 @@
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QGroupBox, QLabel, QPushButton, QMessageBox, QFileDialog
+    QWidget, QVBoxLayout, QGroupBox, QLabel, QPushButton, QMessageBox, QFileDialog, QDoubleSpinBox, QHBoxLayout
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 import pandas as pd
@@ -17,6 +17,7 @@ class VisionPanel(QWidget):
     udp_execution_requested = pyqtSignal()
     actual_export_requested = pyqtSignal()
     conveyor_tracking_toggled = pyqtSignal(bool)
+    conveyor_speed_changed = pyqtSignal(float)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -80,6 +81,18 @@ class VisionPanel(QWidget):
         self.tracking_btn.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold;")
         self.tracking_btn.clicked.connect(self.on_tracking_toggled)
         d_layout.addWidget(self.tracking_btn)
+
+        # 速度调节区
+        speed_layout = QHBoxLayout()
+        speed_layout.addWidget(QLabel("传送带速度(m/s):"))
+        self.speed_spin = QDoubleSpinBox()
+        self.speed_spin.setRange(0.01, 0.5)
+        self.speed_spin.setSingleStep(0.01)
+        self.speed_spin.setValue(0.05)
+        self.speed_spin.setStyleSheet("color: #f1c40f; font-weight: bold;")
+        self.speed_spin.valueChanged.connect(self.conveyor_speed_changed.emit)
+        speed_layout.addWidget(self.speed_spin)
+        d_layout.addLayout(speed_layout)
 
         self.tracking_status = QLabel("状态：停止")
         self.tracking_status.setStyleSheet("color: #bdc3c7; font-size: 11px;")
