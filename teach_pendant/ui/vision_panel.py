@@ -72,7 +72,7 @@ class VisionPanel(QWidget):
         layout.addWidget(group)
 
         # --- 新增：动态传送带追踪区 ---
-        dynamic_group = QGroupBox("动态追踪与触碰 (30Hz)")
+        dynamic_group = QGroupBox("动态追踪与触碰 (60Hz)")
         d_layout = QVBoxLayout(dynamic_group)
 
         self.tracking_btn = QPushButton("启动传送带动态追踪")
@@ -106,7 +106,7 @@ class VisionPanel(QWidget):
         if checked:
             self.tracking_btn.setText("停止追踪")
             self.tracking_btn.setStyleSheet("background-color: #e67e22; color: white; font-weight: bold;")
-            self.tracking_status.setText("状态：运行中 (30Hz)")
+            self.tracking_status.setText("状态：运行中 (60Hz)")
         else:
             self.tracking_btn.setText("启动传送带动态追踪")
             self.tracking_btn.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold;")

@@ -26,6 +26,7 @@ from .ui.follower_panel import FollowerPanel
 from .ui.vision_panel import VisionPanel
 from .ui.log_panel import LogPanel
 from .logic.conveyor_tracking_service import ConveyorTrackingService
+from .logic.udp_tracking_service import UDPTrackingService
 
 # 导入逻辑服务
 import config
@@ -74,6 +75,8 @@ class TeachPendantWindow(QMainWindow):
         # 初始化传送带追踪服务
         self.tracking_service = ConveyorTrackingService(self.controller, self.fast_ik, self.robot_view)
         
+        self.tracking_service.status_updated.connect(self.update_status)
+        
         # 核心缓存
         self.current_vision_trajectory = None
         self.actual_trajectory_log = []
@@ -112,6 +115,9 @@ class TeachPendantWindow(QMainWindow):
         
         if hasattr(self, 'tracking_service'):
             self.tracking_service.set_conveyor_speed(speed)
+            
+        if hasattr(self, 'udp_tracking_service'):
+            self.udp_tracking_service.set_conveyor_speed(speed)
         
         self.statusBar.showMessage(f"传送带速度已调整为: {speed} m/s")
 

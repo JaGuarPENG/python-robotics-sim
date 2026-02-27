@@ -80,13 +80,13 @@ class RobotRenderer:
             actor = self.plotter.add_mesh(line, color=color, line_width=5)
             self.ee_frame_actors.append(actor)
 
-        # 3. Camera FOV - semi-transparent pyramid
+        # 3. Camera FOV - semi-transparent pyramid (0.7m depth)
         points = np.array([
             [0, 0, 0],             # Vertex (EE)
-            [-0.28, -0.28, 0.5],    # Bottom 4 points
-            [0.28, -0.28, 0.5],
-            [0.28, 0.28, 0.5],
-            [-0.28, 0.28, 0.5],
+            [-0.40, -0.40, 0.7],    # Bottom 4 points (0.7 * tan30 ≈ 0.40)
+            [0.40, -0.40, 0.7],
+            [0.40, 0.40, 0.7],
+            [-0.40, 0.40, 0.7],
         ])
         # PyVista faces format: [n_points, i1, i2, ..., n_points, j1, j2, ...]
         faces = [
@@ -166,10 +166,10 @@ class RobotRenderer:
             local_pos = T_inv @ world_pos
             lx, ly, lz = local_pos[:3]
             
-            # Check 60deg FOV pyramid (depth 0.5m, tan(30)=0.56)
+            # Check 60deg FOV pyramid (depth 0.7m, tan(30)≈0.58)
             is_inside = False
-            if 0 < lz < 0.5:
-                limit = 0.56 * lz
+            if 0 < lz < 0.7:
+                limit = 0.58 * lz
                 if abs(lx) < limit and abs(ly) < limit:
                     is_inside = True
             

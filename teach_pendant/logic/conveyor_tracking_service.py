@@ -20,7 +20,7 @@ class ConveyorTrackingService(QObject):
         
         self.is_running = False
         self.tracking_thread = None
-        self.loop_hz = 30.0
+        self.loop_hz = 60.0  # 提升频率至 60Hz
         self.loop_interval = 1.0 / self.loop_hz
         
         # === 状态机变量 ===
@@ -39,8 +39,8 @@ class ConveyorTrackingService(QObject):
         self.xy_threshold = 0.010       # [优化] 水平误差阈值 10mm
         
         # === 动态前馈参数 ===
-        self.look_ahead_frames = 1.5    # [优化] 增加预瞄帧数至 1.5，补偿下压过程中的动态滞后
-        self.intercept_lead_y = 0.0     # [优化] 彻底移除人工提前量，直接瞄准球心
+        self.look_ahead_frames = 3.0    # 60Hz 下预瞄 3 帧约 50ms
+        self.intercept_lead_y = 0.01    # [优化] 10mm 截击提前量，抵消机械滞后
         
         # === 初始位置 (快速定位1) ===
         self.home_joints = [0, -15, 105, 0, -90, 0] # 角度

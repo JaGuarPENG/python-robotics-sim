@@ -28,7 +28,9 @@ class ConnectionPanel(QGroupBox):
 
         layout.addWidget(QLabel("IP:"), 0, 0)
         self.ip_input = QLineEdit(ROBOT_IP)
-        self.ip_input.setMaximumWidth(130)
+        self.ip_input.setMinimumWidth(160)
+        self.ip_input.setMaximumWidth(220)
+        self.ip_input.setStyleSheet("color: #f1c40f; font-weight: bold; padding: 2px;")
         layout.addWidget(self.ip_input, 0, 1)
 
         self.connect_btn = QPushButton("连接")
