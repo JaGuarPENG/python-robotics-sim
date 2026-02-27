@@ -17,6 +17,7 @@ class RobotRenderer:
         self.trajectory_actors = []
         self.actual_path_actors = []
         self.actual_points = []
+        self.fov_actor = None
         
         # --- Conveyor objects properties ---
         self.belt_objects = []
@@ -78,6 +79,25 @@ class RobotRenderer:
             actor = self.plotter.add_mesh(line, color=color, line_width=5)
             self.ee_frame_actors.append(actor)
 
+        # 3. Camera FOV - semi-transparent pyramid
+        points = np.array([
+            [0, 0, 0],             # Vertex (EE)
+            [-0.28, -0.28, 0.5],    # Bottom 4 points
+            [0.28, -0.28, 0.5],
+            [0.28, 0.28, 0.5],
+            [-0.28, 0.28, 0.5],
+        ])
+        # PyVista faces format: [n_points, i1, i2, ..., n_points, j1, j2, ...]
+        faces = [
+            3, 0, 1, 2,
+            3, 0, 2, 3,
+            3, 0, 3, 4,
+            3, 0, 4, 1,
+            4, 1, 2, 3, 4
+        ]
+        fov_mesh = pv.PolyData(points, faces)
+        self.fov_actor = self.plotter.add_mesh(fov_mesh, color='#3498db', opacity=0.3, show_edges=True, edge_color='#ecf0f1')
+
     def update(self, joints_rad):
         """全量更新 (包含模型、坐标轴与传送带物体，并应用 50mm 下沉)"""
         # Update belt objects positions (looping)
@@ -115,6 +135,12 @@ class RobotRenderer:
         ee_pos, ee_rot = self.model.get_ee_pose(joints_rad, use_urdf=True)
         ee_pos_disp = ee_pos - np.array([0, 0, 0.05])
         
+        # 3. Update FOV actor pose
+        T_ee_disp = np.eye(4)
+        T_ee_disp[:3, :3] = ee_rot
+        T_ee_disp[:3, 3] = ee_pos_disp
+        self.fov_actor.user_matrix = T_ee_disp
+
         axes = [ee_rot[:, 0], ee_rot[:, 1], ee_rot[:, 2]]
         for i, (actor, direction) in enumerate(zip(self.ee_frame_actors, axes)):
             new_line = pv.Line(ee_pos_disp, ee_pos_disp + 0.08 * direction)

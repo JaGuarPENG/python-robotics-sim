@@ -33,7 +33,7 @@ class TeachPendantWindow(QMainWindow):
     """示教器主窗口 - 工业级全屏界面"""
 
     CONTINUOUS_TEST_POINTS = [
-        (488, 164, 957, 180, 0, 0), # 示例点 (mm, deg)
+        (665, 121, 710, 0, 2, 180), # 示例点 (mm, deg)
     ]
 
     def __init__(self):
