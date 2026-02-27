@@ -24,10 +24,40 @@ from .ui.joint_control_panel import JointControlPanel
 from .ui.teleop_panel import TeleopPanel
 from .ui.follower_panel import FollowerPanel
 from .ui.vision_panel import VisionPanel
+from .ui.log_panel import LogPanel
 from .logic.conveyor_tracking_service import ConveyorTrackingService
 
 # 导入逻辑服务
 import config
+import sys
+
+class StreamRedirector:
+    """更安全的日志重定向器 (带防递归保护)"""
+    def __init__(self, signal):
+        self.signal = signal
+        self._lock = threading.Lock()
+        self._is_writing = False
+
+    def write(self, text):
+        if not text: return 0
+        # 防递归检查：如果已经在写入过程中触发了打印，直接跳过
+        if self._is_writing:
+            return len(text)
+            
+        with self._lock:
+            self._is_writing = True
+            try:
+                msg = str(text).strip()
+                if msg:
+                    self.signal.emit(msg)
+            except:
+                pass
+            finally:
+                self._is_writing = False
+        return len(text)
+
+    def flush(self):
+        pass
 
 class TeachPendantWindow(QMainWindow):
     """示教器主窗口 - 工业级全屏界面"""
@@ -56,11 +86,18 @@ class TeachPendantWindow(QMainWindow):
         self.view_timer.timeout.connect(self.update_3d_view)
         self.view_timer.start(33)
 
-        # [PHASE 2 TEST] 初始化时不自动打印，可以留一个启动测试的方法
-        # self.test_tracking_timer = QTimer(self)
-        # self.test_tracking_timer.timeout.connect(self._debug_print_tracking)
-        # self.test_tracking_timer.start(500) # 每0.5秒打印一次
-        
+        # 最后：激活日志重定向 (更安全的方法)
+        self._setup_log_redirection()
+
+    def _setup_log_redirection(self):
+        """安全地设置日志重定向 (仅限标准输出)"""
+        try:
+            # 只重定向标准输出，保留标准错误(stderr)到终端，防止闪退
+            sys.stdout = StreamRedirector(self.signals.log_message)
+            print("[System] 日志系统重定向已激活 (Stdout Only)")
+        except:
+            pass
+
     def _debug_print_tracking(self):
         # 通过 robot_view (Robot3DWidget) 获取其内部的 renderer
         if hasattr(self.robot_view, 'renderer') and self.robot_view.renderer:
@@ -97,7 +134,7 @@ class TeachPendantWindow(QMainWindow):
 
     def init_ui(self):
         """初始化 UI 布局"""
-        self.setWindowTitle("机器人示教器 - Teach Pendant (Industrial FS)")
+        self.setWindowTitle("仿真孪生系统 - KAANH")
         self.setMinimumSize(1400, 900)
         self.showMaximized()
 
@@ -112,7 +149,7 @@ class TeachPendantWindow(QMainWindow):
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
 
-        view_group = QGroupBox("3D 机械臂监控系统")
+        view_group = QGroupBox("佳安 3D 仿真场景")
         view_layout = QVBoxLayout(view_group)
         self.robot_view = Robot3DWidget()
         view_layout.addWidget(self.robot_view)
@@ -131,11 +168,23 @@ class TeachPendantWindow(QMainWindow):
         
         view_btn_layout.addStretch()
         view_layout.addLayout(view_btn_layout)
-        left_layout.addWidget(view_group)
+        left_layout.addWidget(view_group, stretch=3) # 增加 3D 视图权重
 
-        # 状态面板 (包含线性偏差)
+        # ==========================================
+        # 左侧下方：状态面板 + 日志面板 (并排显示)
+        # ==========================================
+        bottom_info_layout = QHBoxLayout()
+        bottom_info_layout.setSpacing(10)
+
+        # 状态面板 (缩小版)
         self.status_panel = RobotStatusPanel(self.controller, self.signals)
-        left_layout.addWidget(self.status_panel)
+        bottom_info_layout.addWidget(self.status_panel, stretch=1)
+
+        # 日志面板 (新增)
+        self.log_panel = LogPanel(self.signals)
+        bottom_info_layout.addWidget(self.log_panel, stretch=1)
+
+        left_layout.addLayout(bottom_info_layout, stretch=1)
 
         main_layout.addWidget(left_panel, stretch=4)
 

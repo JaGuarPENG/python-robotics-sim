@@ -27,82 +27,100 @@ class RobotStatusPanel(QWidget):
         self.connect_signals()
 
     def init_ui(self):
-        """初始化 UI (针对全屏大字号优化)"""
+        """初始化 UI (均衡美化版)"""
+        # 统一字体大小，确保清晰度与平衡感
+        self.setStyleSheet("""
+            QLabel { font-size: 30px; } 
+            QGroupBox { font-size: 35px; font-weight: bold; margin-top: 15px; padding-top: 20px; }
+            QPushButton#small_refresh_btn { 
+                font-size: 30px; 
+                min-height: 45px; 
+                min-width: 100px;
+                border: 2px solid #555; 
+                border-radius: 8px;
+                background-color: #34495e;
+            }
+            QPushButton#small_refresh_btn:hover { background-color: #4a627a; }
+        """)
+        
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(15) # 增加组间距，防止挤在一起
 
         # 1. 末端位置显示 (TCP)
         tcp_group = QGroupBox("末端位姿 (Real-time TCP)")
         tcp_layout = QGridLayout(tcp_group)
+        tcp_layout.setSpacing(15) # 增加单元格间距
+        
+        # 设置 6 列等宽，确保布局整齐均衡
+        for c in range(6):
+            tcp_layout.setColumnStretch(c, 1)
 
         for i, (name, unit) in enumerate([('X', 'mm'), ('Y', 'mm'), ('Z', 'mm'),
                                            ('Rx', '°'), ('Ry', '°'), ('Rz', '°')]):
             label = QLabel(f"{name}:")
-            label.setFont(QFont("Arial", 18, QFont.Bold))
+            label.setStyleSheet("font-weight: bold; color: #bdc3c7;")
             tcp_layout.addWidget(label, i // 3, (i % 3) * 2)
 
             value = QLabel("0.00")
-            value.setFont(QFont("Courier New", 30, QFont.Bold))
+            value.setFont(QFont("Courier New", 26, QFont.Bold)) 
             value.setStyleSheet("color: #00ffff;")
             tcp_layout.addWidget(value, i // 3, (i % 3) * 2 + 1)
             self.tcp_labels[name] = value
 
-        note_label = QLabel("* 表示模型计算值")
-        note_label.setStyleSheet("color: #888; font-size: 14px;")
-        tcp_layout.addWidget(note_label, 2, 0, 1, 6)
         layout.addWidget(tcp_group)
 
-        # 2. 机器人状态与误差 (合并显示)
-        status_group = QGroupBox("系统状态与跟踪误差")
+        # 2. 机器人状态与误差
+        status_group = QGroupBox("系统状态与偏差")
         status_layout = QGridLayout(status_group)
+        status_layout.setSpacing(15)
+        # 设置 4 列等宽
+        for c in range(4):
+            status_layout.setColumnStretch(c, 1)
+
+        val_style = "color: #feca57; font-weight: bold; font-size: 20px;"
+        lbl_style = "font-weight: bold; color: #bdc3c7;"
 
         # Row 0
-        status_layout.addWidget(QLabel("运行状态:"), 0, 0)
+        status_layout.addWidget(QLabel("运行:", styleSheet=lbl_style), 0, 0)
         self.robot_status_value = QLabel("--")
-        self.robot_status_value.setStyleSheet("color: #feca57; font-weight: bold;")
+        self.robot_status_value.setStyleSheet(val_style)
         status_layout.addWidget(self.robot_status_value, 0, 1)
 
-        status_layout.addWidget(QLabel("激活状态:"), 0, 2)
+        status_layout.addWidget(QLabel("激活:", styleSheet=lbl_style), 0, 2)
         self.robot_activate_value = QLabel("--")
-        self.robot_activate_value.setStyleSheet("color: #feca57; font-weight: bold;")
+        self.robot_activate_value.setStyleSheet(val_style)
         status_layout.addWidget(self.robot_activate_value, 0, 3)
 
         # Row 1
-        status_layout.addWidget(QLabel("运动状态:"), 1, 0)
+        status_layout.addWidget(QLabel("运动:", styleSheet=lbl_style), 1, 0)
         self.robot_motion_value = QLabel("--")
-        self.robot_motion_value.setStyleSheet("color: #feca57; font-weight: bold;")
+        self.robot_motion_value.setStyleSheet(val_style)
         status_layout.addWidget(self.robot_motion_value, 1, 1)
 
-        status_layout.addWidget(QLabel("控制模式:"), 1, 2)
+        status_layout.addWidget(QLabel("模式:", styleSheet=lbl_style), 1, 2)
         self.robot_mode_value = QLabel("--")
-        self.robot_mode_value.setStyleSheet("color: #feca57; font-weight: bold;")
+        self.robot_mode_value.setStyleSheet(val_style)
         status_layout.addWidget(self.robot_mode_value, 1, 3)
 
-        # Row 2: 原本按钮的位置，现在显示误差 (核心位置)
-        err_title = QLabel("线性偏差:")
-        err_title.setStyleSheet("font-weight: bold; color: #ecf0f1;")
-        status_layout.addWidget(err_title, 2, 0)
-        
+        # Row 2: 线性偏差与报警
+        status_layout.addWidget(QLabel("偏差:", styleSheet=lbl_style), 2, 0)
         self.linear_error_label = QLabel("0.00 mm")
-        self.linear_error_label.setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 36px;") # 极大字号
+        self.linear_error_label.setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 28px;") 
         status_layout.addWidget(self.linear_error_label, 2, 1)
 
-        # 报警信息
-        status_layout.addWidget(QLabel("报警:"), 2, 2)
+        status_layout.addWidget(QLabel("报警:", styleSheet=lbl_style), 2, 2)
         self.robot_error_value = QLabel("无")
-        self.robot_error_value.setStyleSheet("color: #2ecc71;")
+        self.robot_error_value.setStyleSheet("color: #2ecc71; font-weight: bold; font-size: 20px;")
         status_layout.addWidget(self.robot_error_value, 2, 3)
 
-        # 刷新按钮 (放在最后，不占用主要网格)
-        btn_layout = QHBoxLayout()
-        self.refresh_status_btn = QPushButton("手动刷新状态")
-        self.refresh_status_btn.setMinimumHeight(50)
+        # 刷新按钮 (独立一行，靠右)
+        self.refresh_status_btn = QPushButton("刷新状态")
+        self.refresh_status_btn.setObjectName("small_refresh_btn")
         self.refresh_status_btn.setEnabled(False)
         self.refresh_status_btn.clicked.connect(self.on_refresh_status)
-        btn_layout.addWidget(self.refresh_status_btn)
+        status_layout.addWidget(self.refresh_status_btn, 3, 3, Qt.AlignRight)
         
-        layout.addLayout(status_layout)
-        layout.addLayout(btn_layout)
         layout.addWidget(status_group)
 
     def connect_signals(self):
