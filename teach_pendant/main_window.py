@@ -26,15 +26,10 @@ from .ui.follower_panel import FollowerPanel
 from .ui.vision_panel import VisionPanel
 
 # 导入逻辑服务
-from .logic.trajectory_service import TrajectoryService
 import config
 
 class TeachPendantWindow(QMainWindow):
     """示教器主窗口 - 工业级全屏界面"""
-
-    CONTINUOUS_TEST_POINTS = [
-        (665, 121, 710, 0, 2, 180), # 示例点 (mm, deg)
-    ]
 
     def __init__(self):
         super().__init__()
@@ -42,9 +37,6 @@ class TeachPendantWindow(QMainWindow):
         self.controller = RobotController(self.signals)
         self.fast_ik = FastIKSolver()
         
-        # 初始化逻辑服务
-        self.traj_service = TrajectoryService(self.controller, self.signals, self.fast_ik)
-
         self.init_ui()
         self.connect_signals()
 
@@ -93,16 +85,6 @@ class TeachPendantWindow(QMainWindow):
         self.fov_toggle.setChecked(True)
         self.fov_toggle.stateChanged.connect(lambda state: self.robot_view.set_fov_visible(state == Qt.Checked))
         view_btn_layout.addWidget(self.fov_toggle)
-
-        self.move_target_btn = QPushButton("移动至目标点 (IK)")
-        self.move_target_btn.setStyleSheet("background-color: #e67e22; color: white;")
-        self.move_target_btn.clicked.connect(self.on_move_to_target)
-        view_btn_layout.addWidget(self.move_target_btn)
-        
-        self.run_traj_btn = QPushButton("画圆轨迹 (Circle)")
-        self.run_traj_btn.setStyleSheet("background-color: #9b59b6; color: white;")
-        self.run_traj_btn.clicked.connect(self.on_run_trajectory)
-        view_btn_layout.addWidget(self.run_traj_btn)
         
         view_btn_layout.addStretch()
         view_layout.addLayout(view_btn_layout)
@@ -422,26 +404,6 @@ class TeachPendantWindow(QMainWindow):
     def on_one_click_follower(self):
         ip = self.conn_panel.get_ip()
         self.follower_panel.on_one_click_follower(ip)
-
-    def on_move_to_target(self):
-        if not self.controller.state.is_enabled:
-            QMessageBox.warning(self, "错误", "机器人未使能，无法执行运动")
-            return
-        target = self.CONTINUOUS_TEST_POINTS[0]
-        self.statusBar.showMessage("正在解算 IK...")
-        target_joints, ik_time = self.traj_service.move_to_target(target, self.controller.current_joints)
-        if target_joints:
-            if QMessageBox.question(self, "确认移动", f"IK 解算成功({ik_time:.1f}ms)，是否移动？") == QMessageBox.Yes:
-                self.controller.move_joint(target_joints, vels=[30,30,30])
-        else: QMessageBox.warning(self, "错误", "无法找到逆解")
-
-    def on_run_trajectory(self):
-        if not self.controller.state.is_enabled:
-            QMessageBox.warning(self, "错误", "机器人未使能，无法执行轨迹")
-            return
-        center = self.CONTINUOUS_TEST_POINTS[0]
-        points = self.traj_service.run_circular_trajectory(center, 50.0, 36)
-        self.robot_view.set_trajectory(points)
 
     def on_command_finished(self, success, message): self.update_status(message)
     def on_connection_changed(self, connected, port_type): 
