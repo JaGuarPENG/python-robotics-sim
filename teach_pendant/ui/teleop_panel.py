@@ -55,12 +55,12 @@ class TeleopPanel(QWidget):
 
         # 步进点位测试按钮
         test_btns_layout = QGridLayout()
-        self.btn_x_plus = QPushButton("X +20")
-        self.btn_y_plus = QPushButton("Y +20")
-        self.btn_z_plus = QPushButton("Z +20")
-        self.btn_x_minus = QPushButton("X -20")
-        self.btn_y_minus = QPushButton("Y -20")
-        self.btn_z_minus = QPushButton("Z -20")
+        self.btn_x_plus = QPushButton("X +5")
+        self.btn_y_plus = QPushButton("Y +5")
+        self.btn_z_plus = QPushButton("Z +5")
+        self.btn_x_minus = QPushButton("X -5")
+        self.btn_y_minus = QPushButton("Y -5")
+        self.btn_z_minus = QPushButton("Z -5")
         
         self.test_btns = [
             self.btn_x_plus, self.btn_y_plus, self.btn_z_plus,
@@ -71,12 +71,12 @@ class TeleopPanel(QWidget):
             btn.setEnabled(False)
             test_btns_layout.addWidget(btn, i // 3, i % 3)
             
-        self.btn_x_plus.clicked.connect(lambda: self.on_step_test(20, 0, 0))
-        self.btn_y_plus.clicked.connect(lambda: self.on_step_test(0, 20, 0))
-        self.btn_z_plus.clicked.connect(lambda: self.on_step_test(0, 0, 20))
-        self.btn_x_minus.clicked.connect(lambda: self.on_step_test(-20, 0, 0))
-        self.btn_y_minus.clicked.connect(lambda: self.on_step_test(0, -20, 0))
-        self.btn_z_minus.clicked.connect(lambda: self.on_step_test(0, 0, -20))
+        self.btn_x_plus.clicked.connect(lambda: self.on_step_test(5, 0, 0))
+        self.btn_y_plus.clicked.connect(lambda: self.on_step_test(0, 5, 0))
+        self.btn_z_plus.clicked.connect(lambda: self.on_step_test(0, 0, 5))
+        self.btn_x_minus.clicked.connect(lambda: self.on_step_test(-5, 0, 0))
+        self.btn_y_minus.clicked.connect(lambda: self.on_step_test(0, -5, 0))
+        self.btn_z_minus.clicked.connect(lambda: self.on_step_test(0, 0, -5))
 
         teleop_layout.addLayout(test_btns_layout, 3, 0, 1, 4)
 

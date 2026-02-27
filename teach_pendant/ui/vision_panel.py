@@ -3,7 +3,7 @@
 """
 
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QGroupBox, QLabel, QPushButton, QMessageBox
+    QWidget, QVBoxLayout, QGroupBox, QLabel, QPushButton, QMessageBox, QFileDialog
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 import pandas as pd
@@ -70,21 +70,50 @@ class VisionPanel(QWidget):
         layout.addWidget(group)
 
     def on_load_clicked(self):
-        """从 CSV 文件加载轨迹"""
-        if not os.path.exists(self.csv_path):
-            QMessageBox.warning(self, "错误", f"找不到轨迹文件：\n{self.csv_path}\n\n请先运行 tools/verify_vision.py 并按 'S' 键保存。")
+        """打开文件对话框选择并加载 CSV 轨迹"""
+        # 设置默认打开目录为项目下的 csv 文件夹
+        default_dir = os.path.join(os.getcwd(), 'csv')
+        if not os.path.exists(default_dir):
+            default_dir = os.getcwd()
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择视觉轨迹 CSV 文件", default_dir, "CSV Files (*.csv);;All Files (*)"
+        )
+
+        if not file_path:
             return
 
         try:
-            df = pd.read_csv(self.csv_path)
-            # 转换为 [ (x, y, z, rx, ry, rz), ... ] 格式
-            points = df.values.tolist()
+            df = pd.read_csv(file_path)
+            # 尝试通过列名匹配，如果失败则按顺序取前6列
+            # 转换为小写以增加兼容性
+            cols = [c.lower() for c in df.columns]
+            
+            if all(k in cols for k in ['x', 'y', 'z']):
+                # 按名称提取
+                target_cols = []
+                for k in ['x', 'y', 'z', 'rx', 'ry', 'rz']:
+                    # 寻找匹配的原始列名
+                    match = [c for c in df.columns if c.lower() == k]
+                    if match:
+                        target_cols.append(match[0])
+                    elif k in ['rx', 'ry', 'rz']:
+                        # 如果没有旋转列，补充默认值 (Rx=180 为末端向下)
+                        df[k] = 180.0 if k == 'rx' else 0.0
+                        target_cols.append(k)
+                
+                points = df[target_cols].values.tolist()
+            else:
+                # 兼容旧版：如果没有 x,y,z 列名，则按顺序取前 6 列
+                points = df.iloc[:, :6].values.tolist()
             
             if len(points) > 0:
+                self.csv_path = file_path # 更新当前使用的路径
                 self.trajectory_generated.emit(points)
                 self.execute_btn.setEnabled(True)
                 self.execute_udp_btn.setEnabled(True)
-                self.result_label.setText(f"已加载: {len(points)} 个轨迹点")
+                filename = os.path.basename(file_path)
+                self.result_label.setText(f"已加载: {filename}\n({len(points)} 个点)")
             else:
                 self.result_label.setText("错误：CSV 文件为空")
         except Exception as e:
