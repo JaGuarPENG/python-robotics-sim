@@ -5,6 +5,7 @@
 import pyvista as pv
 import numpy as np
 import os
+import time
 
 class RobotRenderer:
     """负责 PyVista 场景中的高精度模型渲染 (带 50mm 视觉补偿)"""
@@ -16,12 +17,46 @@ class RobotRenderer:
         self.trajectory_actors = []
         self.actual_path_actors = []
         self.actual_points = []
+        
+        # --- Conveyor objects properties ---
+        self.belt_objects = []
+        self.belt_centers = []
+        self.belt_speed = 0.1  # 0.1 m/s
+        self.last_time = time.time()
+        self.obj_y_coords = np.linspace(-2.5, 2.5, 10, endpoint=False)
 
     def setup_base_scene(self):
         self.plotter.add_axes()
         # 创建一个 50m x 50m 的超大网格，并设置较高的分辨率保持每个网格的间距合理
         grid = pv.Plane(i_size=50, j_size=50, i_resolution=250, j_resolution=250)
         self.plotter.add_mesh(grid, color='#2c3e50', opacity=0.5, show_edges=True)
+
+        # --- Add 5m long conveyor belt (at X=0.6m in front of robot) ---
+        # 1. Main body
+        conveyor_body = pv.Box(bounds=[0.4, 0.8, -2.5, 2.5, -0.05, 0.15])
+        self.plotter.add_mesh(conveyor_body, color='#95a5a6', show_edges=True, edge_color='#2c3e50')
+
+        # 2. Belt surface (dark)
+        conveyor_belt = pv.Box(bounds=[0.42, 0.78, -2.5, 2.5, 0.15, 0.16])
+        self.plotter.add_mesh(conveyor_belt, color='#2c3e50')
+
+        # 3. Support legs
+        for y_pos in [-2.4, 0, 2.4]:
+            leg_left = pv.Box(bounds=[0.45, 0.55, y_pos - 0.05, y_pos + 0.05, -0.05, 0.05])
+            leg_right = pv.Box(bounds=[0.65, 0.75, y_pos - 0.05, y_pos + 0.05, -0.05, 0.05])
+            self.plotter.add_mesh(leg_left, color='#7f8c8d')
+            self.plotter.add_mesh(leg_right, color='#7f8c8d')
+
+        # 4. 10 discs on the belt
+        for _ in range(10):
+            disc = pv.Cylinder(center=(0, 0, 0), direction=(0, 0, 1), radius=0.1, height=0.05)
+            actor = self.plotter.add_mesh(disc, color='#e74c3c', smooth_shading=True)
+            self.belt_objects.append(actor)
+
+            # Center marker for each disc
+            center_dot = pv.Sphere(radius=0.01)
+            center_actor = self.plotter.add_mesh(center_dot, color='#ffffff')
+            self.belt_centers.append(center_actor)
 
     def create_robot_actors(self):
         """加载 STL 并创建 Actor (已移除 link6 法兰盘)"""
@@ -44,8 +79,29 @@ class RobotRenderer:
             self.ee_frame_actors.append(actor)
 
     def update(self, joints_rad):
-        """全量更新 (包含模型与坐标轴，并应用 50mm 下沉)"""
-        # 1. 更新 STL 模型
+        """全量更新 (包含模型、坐标轴与传送带物体，并应用 50mm 下沉)"""
+        # Update belt objects positions (looping)
+        now = time.time()
+        dt = now - self.last_time
+        self.last_time = now
+        
+        dy = self.belt_speed * dt
+        for i, actor in enumerate(self.belt_objects):
+            self.obj_y_coords[i] += dy
+            if self.obj_y_coords[i] > 2.5:
+                self.obj_y_coords[i] -= 5.0
+            
+            T = np.eye(4)
+            T[0, 3] = 0.6
+            T[1, 3] = self.obj_y_coords[i]
+            T[2, 3] = 0.185
+            actor.user_matrix = T
+
+            T_center = T.copy()
+            T_center[2, 3] = 0.211
+            self.belt_centers[i].user_matrix = T_center
+
+        # 1. STL Model
         z_offset_mtx = np.eye(4)
         z_offset_mtx[2, 3] = -0.05
         
@@ -55,9 +111,8 @@ class RobotRenderer:
                 T = self.model.urdf_robot.fkine(joints_rad, end=target_link)
                 actor.user_matrix = z_offset_mtx @ T.A
         
-        # 2. 恢复：更新末端坐标系
+        # 2. End-effector axes
         ee_pos, ee_rot = self.model.get_ee_pose(joints_rad, use_urdf=True)
-        # 同步下移 50mm
         ee_pos_disp = ee_pos - np.array([0, 0, 0.05])
         
         axes = [ee_rot[:, 0], ee_rot[:, 1], ee_rot[:, 2]]
