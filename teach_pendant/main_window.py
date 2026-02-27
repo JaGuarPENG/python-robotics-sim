@@ -24,6 +24,7 @@ from .ui.joint_control_panel import JointControlPanel
 from .ui.teleop_panel import TeleopPanel
 from .ui.follower_panel import FollowerPanel
 from .ui.vision_panel import VisionPanel
+from .logic.conveyor_tracking_service import ConveyorTrackingService
 
 # 导入逻辑服务
 import config
@@ -39,23 +40,32 @@ class TeachPendantWindow(QMainWindow):
         
         self.init_ui()
         self.connect_signals()
-
+        
+        # 初始化传送带追踪服务
+        self.tracking_service = ConveyorTrackingService(self.controller, self.fast_ik, self.robot_view)
+        
         # 核心缓存
         self.current_vision_trajectory = None
         self.actual_trajectory_log = []
         self.is_recording_actual = False
         self.current_target_point = None
         self.playback_frequency = 30.0 # 默认频率
-
+        
         # 启动 3D 视图更新定时器 (30Hz)
         self.view_timer = QTimer()
         self.view_timer.timeout.connect(self.update_3d_view)
         self.view_timer.start(33)
 
-        # [PHASE 1 TEST] 定时打印当前锁定的绿色小球坐标
-        self.test_tracking_timer = QTimer(self)
-        self.test_tracking_timer.timeout.connect(self._debug_print_tracking)
-        self.test_tracking_timer.start(500) # 每0.5秒打印一次
+        # [PHASE 2 TEST] 初始化时不自动打印，可以留一个启动测试的方法
+        # self.test_tracking_timer = QTimer(self)
+        # self.test_tracking_timer.timeout.connect(self._debug_print_tracking)
+        # self.test_tracking_timer.start(500) # 每0.5秒打印一次
+        
+        # [PHASE 2 TEST] 我们在界面上绑定一个按键，或者直接延迟3秒启动测试服务
+        self.phase2_test_timer = QTimer(self)
+        self.phase2_test_timer.setSingleShot(True)
+        self.phase2_test_timer.timeout.connect(self.tracking_service.start_tracking)
+        self.phase2_test_timer.start(3000)
 
     def _debug_print_tracking(self):
         # 通过 robot_view (Robot3DWidget) 获取其内部的 renderer
