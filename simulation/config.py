@@ -56,7 +56,8 @@ TRAJ_INIT_POS = [0.25, 0.0, 0.2]
 TRAJ_VELOCITY = 0.01
 
 # CSV 模式参数
-TRAJ_CSV_PATH = 'csv/marker_coordinates_kalman.csv'  # CSV 文件路径
+#TRAJ_CSV_PATH = 'csv/marker_coordinates_kalman.csv'  # CSV 文件路径
+TRAJ_CSV_PATH = 'csv/linear_1m_1500pts.csv'  # CSV 文件路径
 TRAJ_Z_HEIGHT = 0.15  # CSV 轨迹的 Z 高度 (米)
 TRAJ_WORLD_OFFSET = [0.3, 0.0]  # 世界坐标系偏移 [x, y]
 

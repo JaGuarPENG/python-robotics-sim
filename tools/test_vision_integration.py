@@ -11,7 +11,7 @@ import sys
 # 将项目根目录加入路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config
+from simulation import config
 from teach_pendant.logic.vision_service import VisionService
 
 def main():

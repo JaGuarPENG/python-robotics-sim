@@ -4,12 +4,12 @@ import numpy as np
 import time
 import roboticstoolbox as rtb
 import spatialmath as sm
-from config import *
-from trajectory import TrajectoryGenerator
-from estimator import KalmanFilterEstimator
-from controller import SimplePBVS
+from simulation.config import *
+from simulation.trajectory import TrajectoryGenerator
+from simulation.estimator import KalmanFilterEstimator
+from simulation.controller import SimplePBVS
 from tools.setup import compute_ik
-from vision import VisionSystem
+from simulation.vision import VisionSystem
 
 def get_simulation_duration(trajectory=None, vision_system=None, use_real_vision=False):
     if use_real_vision and vision_system is not None:

@@ -15,7 +15,7 @@ from ultralytics import YOLO
 
 # 将项目根目录加入路径以读取 config
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config
+from simulation import config
 
 class VisionServer:
     def __init__(self, host='127.0.0.1', port=6000):

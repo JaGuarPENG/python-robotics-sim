@@ -26,10 +26,9 @@ from .ui.follower_panel import FollowerPanel
 from .ui.vision_panel import VisionPanel
 from .ui.log_panel import LogPanel
 from .logic.conveyor_tracking_service import ConveyorTrackingService
-from .logic.udp_tracking_service import UDPTrackingService
 
 # 导入逻辑服务
-import config
+from . import config
 import sys
 
 class StreamRedirector:

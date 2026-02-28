@@ -7,9 +7,9 @@ import time
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config
-from vision import VisionSystem
-from estimator import KalmanFilterEstimator
+from simulation import config
+from simulation.vision import VisionSystem
+from simulation.estimator import KalmanFilterEstimator
 
 def test_vision_filtering():
     print("启动真实视频轨迹滤波测试...")

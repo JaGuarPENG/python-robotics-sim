@@ -10,7 +10,7 @@ from ultralytics import YOLO
 
 # 引入项目配置
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config
+from simulation import config
 
 # 从 config 同步参数
 WEIGHTS = config.YOLO_WEIGHTS_PATH

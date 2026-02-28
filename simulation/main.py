@@ -5,8 +5,8 @@ import roboticstoolbox as rtb
 import spatialmath as sm
 import time
 import os
-from simulation import run_simulation
-import config
+from simulation.simulation import run_simulation
+from simulation import config
 from tools.video_saver import VideoSaver
 
 def plot_results(results):

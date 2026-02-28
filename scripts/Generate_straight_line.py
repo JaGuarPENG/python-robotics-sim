@@ -47,7 +47,7 @@ def generate_trajectory_data():
     df = pd.DataFrame(data)
 
     # --- 保存为 CSV 文件 ---
-    output_filename = 'linear_trajectory_0.5m.csv'
+    output_filename = 'csv/linear_trajectory_0.5m.csv'
     # 使用 utf-8-sig 编码防止在 Excel 中打开时中文乱码
     df.to_csv(output_filename, index=False, encoding='utf-8-sig')
     

@@ -2,8 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import roboticstoolbox as rtb
 import spatialmath as sm
-from trajectory import TrajectoryGenerator
-import config
+from simulation.trajectory import TrajectoryGenerator
+from simulation import config
 
 
 def compute_ik(robot, target_pos, q_guess=None):

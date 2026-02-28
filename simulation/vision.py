@@ -1,7 +1,7 @@
 # vision_system.py
 import numpy as np
 import cv2
-import config
+from simulation import config
 from tools.calibrate_camera import MarkerTracker
 
 

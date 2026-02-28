@@ -8,7 +8,7 @@ import os
 # 动态导入 config，避免循环导入
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config
+from simulation import config
 
 
 class VideoSaver:

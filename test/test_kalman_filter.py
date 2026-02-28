@@ -5,7 +5,7 @@ import os
 # 动态导入 config，避免循环导入
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from estimator import KalmanFilterEstimator
+from simulation.estimator import KalmanFilterEstimator
 
 
 def get_ground_truth(mode, t, **kwargs):
