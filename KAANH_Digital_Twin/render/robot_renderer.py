@@ -25,7 +25,10 @@ class RobotRenderer:
         self.belt_states = [0] * 10  # 0: WAITING (white), 1: TRACKING (green), 2: REACHED (red)
         self.belt_speed = 0.05  # Default 0.05 m/s
         self.last_time = time.time()
-        self.obj_y_coords = np.linspace(-2.5, 2.5, 10, endpoint=False)
+        # 初始化 Y 坐标并加入随机扰动，打破绝对等距
+        self.obj_y_coords = np.linspace(-2.5, 2.5, 10, endpoint=False) + np.random.uniform(-0.15, 0.15, 10)
+        # 初始化随机的 X 坐标 (传送带宽度范围约为 0.45 到 0.75)
+        self.obj_x_coords = np.random.uniform(0.45, 0.75, 10)
 
     def setup_base_scene(self):
         self.plotter.add_axes()
@@ -116,11 +119,12 @@ class RobotRenderer:
             self.obj_y_coords[i] += dy
             if self.obj_y_coords[i] > 2.5:
                 self.obj_y_coords[i] -= 5.0
+                self.obj_x_coords[i] = np.random.uniform(0.45, 0.75)  # 循环时赋予新的随机 X 坐标
                 self.belt_states[i] = 0
                 self.belt_centers[i].GetProperty().SetColor(1.0, 1.0, 1.0)
             
             T = np.eye(4)
-            T[0, 3] = 0.6
+            T[0, 3] = self.obj_x_coords[i]
             T[1, 3] = self.obj_y_coords[i]
             T[2, 3] = 0.185
             actor.user_matrix = T
@@ -162,7 +166,7 @@ class RobotRenderer:
             if self.belt_states[i] == 2:
                 continue
 
-            world_pos = np.array([0.6, self.obj_y_coords[i], 0.211, 1.0])
+            world_pos = np.array([self.obj_x_coords[i], self.obj_y_coords[i], 0.211, 1.0])
             local_pos = T_inv @ world_pos
             lx, ly, lz = local_pos[:3]
             
@@ -224,7 +228,7 @@ class RobotRenderer:
         """Returns the world coordinates [X, Y, Z] and ID of the currently tracked (green) ball, or (None, None)."""
         for i, state in enumerate(self.belt_states):
             if state == 1:
-                return np.array([0.6, self.obj_y_coords[i], 0.211]), i
+                return np.array([self.obj_x_coords[i], self.obj_y_coords[i], 0.211]), i
         return None, None
 
     def mark_target_reached(self):

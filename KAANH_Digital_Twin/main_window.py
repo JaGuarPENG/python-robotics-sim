@@ -114,9 +114,6 @@ class TeachPendantWindow(QMainWindow):
         
         if hasattr(self, 'tracking_service'):
             self.tracking_service.set_conveyor_speed(speed)
-            
-        if hasattr(self, 'udp_tracking_service'):
-            self.udp_tracking_service.set_conveyor_speed(speed)
         
         self.statusBar.showMessage(f"传送带速度已调整为: {speed} m/s")
 

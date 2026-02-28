@@ -178,25 +178,6 @@ self.signals.status_updated.connect(self.on_status_updated)
 
 ---
 
-### udp_tracking_service.py
-
-**类：`UDPTrackingService`**
-
-UDP 高速追踪服务，用于实时视觉伺服跟随。
-
-| 属性/方法 | 说明 |
-|-----------|------|
-| `running` | 服务运行状态 |
-| `control_rate` | 控制频率（Hz） |
-| `kp, ki` | PI控制器参数 |
-| `max_step` | 最大步长限制 |
-| `start()` | 启动服务 |
-| `stop()` | 停止服务 |
-| `update_target(target_pos)` | 更新目标位置 |
-| `_control_loop()` | 控制循环 |
-
----
-
 ### vision_service.py
 
 **类：`VisionService`**
