@@ -1,6 +1,6 @@
-# Teach Pendant 函数参考手册
+# KAANH_Digital_Twin 函数参考手册
 
-本文档汇总 `teach_pendant` 模块下所有核心文件的类与函数说明，便于快速查阅。
+本文档汇总 `KAANH_Digital_Twin` (代码目录 `teach_pendant`) 模块下所有核心文件的类与函数说明，便于快速查阅。
 
 ---
 
@@ -289,9 +289,9 @@ PyVista 3D渲染执行器，负责高精度模型渲染。
 
 ### main_window.py
 
-**类：`TeachPendantWindow`**
+**类：`MainWindow`**
 
-示教器主窗口，集成所有功能模块。
+KAANH_Digital_Twin 主窗口，集成所有功能模块。
 
 | 方法 | 说明 |
 |------|------|

@@ -1,4 +1,4 @@
-# KAANH 仿真孪生示教器 (Teach Pendant)
+# KAANH_Digital_Twin 机器人数字孪生仿真平台
 
 ![Python](https://img.shields.io/badge/python-v3.8+-blue.svg)
 ![PyQt5](https://img.shields.io/badge/PyQt-5-green.svg)
@@ -6,7 +6,7 @@
 
 ## 一句话简介
 
-KAANH 仿真孪生示教器是一个基于 PyQt5 的工业级机器人全功能控制台，集成了 3D 数字孪生渲染、WebSocket/UDP 双模态控制与高级动态视觉追踪功能。
+KAANH_Digital_Twin 是一个基于 PyQt5 的机器人数字孪生仿真平台，集成了 3D 实时渲染、视觉伺服控制、轨迹规划与硬件通信功能。
 
 ## 功能特性
 
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 ### 启动服务
 
 ```bash
-# 启动示教器主界面
+# 启动 KAANH_Digital_Twin
 python -m teach_pendant.app
 ```
 
@@ -61,7 +61,7 @@ python -m teach_pendant.app
 
 ![演示动画](assets/demo.gif)
 
-> 上图展示了 KAANH 仿真孪生示教器的实际运行效果：3D 数字孪生实时渲染、机器人状态监控与关节控制、视觉追踪与跟随模式演示。
+> 上图展示了 KAANH_Digital_Twin 的实际运行效果：3D 数字孪生实时渲染、机器人状态监控与关节控制、视觉追踪与跟随模式演示。
 
 📹 **[下载高清演示视频 (MP4)](assets/demo_20260228.mp4)**
 
@@ -69,13 +69,13 @@ python -m teach_pendant.app
 
 ```text
 python-robotics-sim/
-├── teach_pendant/               # 示教器核心功能与前端界面目录
+├── teach_pendant/               # KAANH_Digital_Twin 核心功能与前端界面目录
 │   ├── app.py                   # 应用程序入口，负责 QApplication 的初始化及深色主题样式配置
-│   ├── main_window.py           # 示教器主窗口，负责各功能面板（UI）与业务服务（Logic）的集成与跨线程调度
+│   ├── main_window.py           # KAANH_Digital_Twin 主窗口，负责各功能面板（UI）与业务服务（Logic）的集成与跨线程调度
 │   ├── robot_controller.py      # 硬件抽象网关，封装 WebSocket 基础指令与 UDP 高速指令的收发逻辑
 │   ├── robot_3d_widget.py       # 3D 可视化视口，基于 PyVista 渲染机器人的实时动作与摄像头视野
 │   ├── signals.py               # 信号总线中心，定义全局 PyQt 信号以实现工作线程与 UI 线程的安全通信
-│   ├── config.py                # 示教器全局静态配置与参数定义
+│   ├── config.py                # KAANH_Digital_Twin 全局静态配置与参数定义
 │   ├── core/                    # [核心状态与防护模块]
 │   │   ├── robot_state.py       # 线程安全的数据仓库，维护机器人的实时状态（关节角、TCP、工作模式等）
 │   │   └── safety_guard.py      # 运动安全拦截器，校验运动指令的合法性（速度限制、软限位检查等）

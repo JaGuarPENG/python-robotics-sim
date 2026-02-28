@@ -27,7 +27,7 @@ pip install -r requirements.txt
 pip install PyQt5 pyvista numpy pandas scipy
 
 # 4. 启动开发服务器（主界面）
-python -m teach_pendant.app
+python -m teach_pendant.app  # 启动 KAANH_Digital_Twin
 ```
 
 ## 2. 项目结构说明
@@ -35,7 +35,7 @@ python -m teach_pendant.app
 ### 2.1 目录结构
 
 ```
-teach_pendant/
+teach_pendant/  # KAANH_Digital_Twin 源码目录
 ├── app.py                 # 应用入口
 ├── main_window.py         # 主窗口
 ├── robot_controller.py    # 机器人控制器
@@ -83,13 +83,13 @@ teach_pendant/
 
 ### 3.2 UI 与逻辑强制解耦
 
-KAANH 示教器最基础的开发准则：**严禁在 UI (Main Thread) 中执行耗时（> 16ms）的任务。**
+KAANH_Digital_Twin 最基础的开发准则：**严禁在 UI (Main Thread) 中执行耗时（> 16ms）的任务。**
 
 所有涉及网络 I/O (`time.sleep()`, `socket.recv()`) 或密集计算的动作，必须交由 `logic` 层中的服务在独立的 `threading.Thread` 中处理。
 
 ### 3.3 多线程安全 (Signal-Driven)
 
-由于后台线程无法直接修改 PyQt 控件（如 `QLabel.setText()`），我们利用 `teach_pendant/signals.py` 作为统一事件总线：
+由于后台线程无法直接修改 PyQt 控件（如 `QLabel.setText()`），我们利用 `teach_pendant/signals.py` 作为 KAANH_Digital_Twin 的统一事件总线：
 
 **错误示范（将导致崩溃）**：
 ```python
@@ -144,7 +144,7 @@ class RobotController:
 
 假设你需要开发一个控制外部夹爪的 `GripperPanel`。
 
-**步骤 1：在 `teach_pendant/ui/` 下创建 `gripper_panel.py`**
+**步骤 1：在 `teach_pendant/ui/` (KAANH_Digital_Twin UI 目录) 下创建 `gripper_panel.py`**
 
 ```python
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton

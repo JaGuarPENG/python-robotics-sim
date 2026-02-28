@@ -4,12 +4,12 @@
 
 ### 1.1 架构图
 
-KAANH 示教器虽然是一个基于 PyQt 的桌面端应用程序，但在工业现场使用时，通常部署在工控机（IPC）、工业平板或调试笔记本上，并通过专用的局域网与机器人控制器建立低延迟的数据链路。
+KAANH_Digital_Twin 虽然是一个基于 PyQt 的桌面端应用程序，但在工业现场使用时，通常部署在工控机（IPC）、工业平板或调试笔记本上，并通过专用的局域网与机器人控制器建立低延迟的数据链路。
 
 ```mermaid
 graph LR
-    subgraph TeachPendant["示教器终端 (工控机/笔记本)"]
-        App[Teach Pendant APP]
+    subgraph DigitalTwin["KAANH_Digital_Twin 终端 (工控机/笔记本)"]
+        App[KAANH_Digital_Twin APP]
         Env[Python 虚拟环境]
         App --> Env
     end
@@ -33,7 +33,7 @@ graph LR
 
 | 组件 | CPU | 内存 | 存储 | 网络 |
 |------|-----|------|------|------|
-| 示教器终端 | i5 或更高 | 8GB | 10GB | 千兆有线网卡 |
+| KAANH_Digital_Twin 终端 | i5 或更高 | 8GB | 10GB | 千兆有线网卡 |
 
 ## 2. 环境配置
 
@@ -84,7 +84,7 @@ pip install --no-index --find-links=./packages -r requirements.txt
 
 ```bat
 @echo off
-echo 正在启动 KAANH 示教器...
+echo 正在启动 KAANH_Digital_Twin...
 cd /d "D:\your_path\python-robotics-sim"
 REM 如果使用了 conda 虚拟环境
 call conda activate robosim
@@ -96,7 +96,7 @@ pause
 
 ### 4.1 网络隔离要求
 
-强烈建议将机器人系统置于一个**独立的子网**内（例如 `192.168.1.x`）。
+强烈建议将 KAANH_Digital_Twin 与机器人系统部署在一个**独立的子网**内（例如 `192.168.1.x`）。
 
 - **工控机 IP 设置**：设置固定 IP（如 `192.168.1.100`）
 - **控制器 IP**：确认识别控制器 IP（如 `192.168.1.10`）
@@ -104,7 +104,7 @@ pause
 
 ### 4.2 高速随动 (Follower Mode) 稳定性保障
 
-当启用视觉追踪的 `UDP 跟随模式` 时：
+当 KAANH_Digital_Twin 启用视觉追踪的 `UDP 跟随模式` 时：
 
 1. **绝对禁止**在网络链路中使用集线器（Hub），必须使用工业级交换机（Switch）
 2. **系统休眠**：在 Windows 系统设置中，**禁用**"允许计算机关闭此设备以节约电源"（针对有线网卡）
@@ -123,7 +123,7 @@ pause
 
 ### 5.2 日志监控
 
-示教器的日志输出被重定向到 UI 的 LogPanel，同时也写入到控制台。建议：
+KAANH_Digital_Twin 的日志输出被重定向到 UI 的 LogPanel，同时也写入到控制台。建议：
 
 - 定期检查日志中的错误和警告信息
 - 对于长时间运行的场景，建议定期清理日志缓冲区
@@ -161,7 +161,7 @@ python -m teach_pendant.app
 
 ### 6.4 连接中断/自动重连
 
-示教器内置了自动重连机制：
+KAANH_Digital_Twin 内置了自动重连机制：
 
 - 当 WebSocket 连接断开时，监控线程会尝试自动重连
 - 重连成功后会自动恢复登录和使能状态
@@ -173,7 +173,7 @@ python -m teach_pendant.app
 - [ ] 工控机防火墙已正确配置（或禁用相关网卡的防火墙）
 - [ ] 使用千兆工业交换机，禁止使用 Hub 或 Wi-Fi
 - [ ] 网卡电源管理已禁用（不允许关闭设备以节约电源）
-- [ ] 示教器软件版本与控制器固件版本兼容
+- [ ] KAANH_Digital_Twin 软件版本与控制器固件版本兼容
 - [ ] 现场操作人员已完成基本操作培训
 
 ## 8. 维护窗口

@@ -13,7 +13,7 @@
 
 ### 2.1 项目背景
 
-KAANH 仿真孪生示教器旨在提供一个综合性的桌面平台，用于工业机器人的配置、控制、轨迹规划与高级视觉伺服测试。传统示教器往往交互繁琐且缺乏三维可视化预览，本项目通过引入 3D 数字孪生与双通道实时通信，大幅降低了机器人的调试与部署门槛。
+KAANH_Digital_Twin 旨在提供一个综合性的机器人数字孪生仿真平台，用于工业机器人的配置、控制、轨迹规划与高级视觉伺服测试。传统机器人示教器往往交互繁琐且缺乏三维可视化预览，本项目通过引入 3D 数字孪生与双通道实时通信，大幅降低了机器人的调试与部署门槛。
 
 ### 2.2 设计目标
 
@@ -43,7 +43,7 @@ KAANH 仿真孪生示教器旨在提供一个综合性的桌面平台，用于�
 ```mermaid
 graph TB
     subgraph UI层["UI 渲染与交互层 (Main Thread)"]
-        Main[TeachPendantWindow<br/>主调度与总线]
+        Main[MainWindow<br/>主调度与总线]
         3D[Robot3DWidget<br/>30Hz OpenGL渲染]
         Panels[UI Panels<br/>视觉/连接/控制面板]
         Log[LogPanel<br/>日志流重定向]
@@ -95,7 +95,7 @@ graph TB
 
 ### 4.3 模块交互机制
 
-系统采用 **信号驱动模式 (Signal-Driven)** 来解决多线程 UI 更新问题。
+KAANH_Digital_Twin 采用 **信号驱动模式 (Signal-Driven)** 来解决多线程 UI 更新问题。
 
 **自顶向下**：UI 面板捕获点击事件后，将参数传递给 `logic` 层的相关 Service。Service 随后会启动独立的 `threading.Thread` 开始执行长效任务。
 
@@ -124,7 +124,7 @@ graph TB
 
 ### 6.1 核心状态容器 (`RobotState`)
 
-为了在多线程环境下保证数据读写的安全性，采用了读写锁 (Lock) 机制进行保护。
+RobotState 用于在 KAANH_Digital_Twin 的多线程环境下保证数据读写的安全性，采用读写锁 (Lock) 机制进行保护。
 
 ```mermaid
 classDiagram
@@ -155,7 +155,7 @@ classDiagram
 
 ### 7.1 内部通信接口 (WorkerSignals)
 
-`teach_pendant.signals.WorkerSignals` 继承自 `QObject`，定义了后台向 UI 层通讯的规范：
+`KAANH_Digital_Twin.signals.WorkerSignals` 继承自 `QObject`，定义了后台向 UI 层通讯的规范：
 
 | 信号 | 参数 | 用途 |
 |------|------|------|

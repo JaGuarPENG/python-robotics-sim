@@ -2,9 +2,9 @@
 
 ## 1. 接口概览
 
-本文档定义了 `KAANH 仿真孪生示教器` 内部核心模块（主要指 `RobotController` 和 `WorkerSignals`）的方法级接口。这些 API 并非通过 HTTP 暴露的网络接口，而是供系统内部其他模块（如 UI 面板或逻辑服务层）调用的 Python 方法签名与信号协议。
+本文档定义了 `KAANH_Digital_Twin` 内部核心模块（主要指 `RobotController` 和 `WorkerSignals`）的方法级接口。这些 API 并非通过 HTTP 暴露的网络接口，而是供系统内部其他模块（如 UI 面板或逻辑服务层）调用的 Python 方法签名与信号协议。
 
-> **说明**：示教器向下与实体机器人交互使用的是私有 WebSocket 和 UDP 协议，这些协议的细节已被 `RobotController` 屏蔽。开发者在扩展新功能时，仅需调用本文档列出的 API。
+> **说明**：KAANH_Digital_Twin 向下与实体机器人交互使用的是私有 WebSocket 和 UDP 协议，这些协议的细节已被 `RobotController` 屏蔽。开发者在扩展新功能时，仅需调用本文档列出的 API。
 
 ## 2. 信号系统 (WorkerSignals)
 
