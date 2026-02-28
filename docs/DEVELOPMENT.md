@@ -27,7 +27,7 @@ pip install -r requirements.txt
 pip install PyQt5 pyvista numpy pandas scipy
 
 # 4. 启动开发服务器（主界面）
-python -m KAANH_Digital_Twin.app  # 启动 KAANH_Digital_Twin
+python KAANH_Digital_Twin_launcher.py  # 启动 KAANH_Digital_Twin
 ```
 
 ## 2. 项目结构说明

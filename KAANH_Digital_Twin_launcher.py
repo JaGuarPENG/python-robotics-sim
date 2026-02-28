@@ -14,9 +14,9 @@
 10. 机器人状态查询 (运行状态、激活状态、运动状态、错误信息)
 
 使用方法:
-    python teach_pendant.py
+    python KAANH_Digital_Twin_launcher.py
     或
-    python -m KAANH_Digital_Twin
+    python -m KAANH_Digital_Twin.app
 """
 
 from KAANH_Digital_Twin import main

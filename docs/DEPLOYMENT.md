@@ -88,7 +88,7 @@ echo 正在启动 KAANH_Digital_Twin...
 cd /d "D:\your_path\python-robotics-sim"
 REM 如果使用了 conda 虚拟环境
 call conda activate robosim
-python -m KAANH_Digital_Twin.app
+python KAANH_Digital_Twin_launcher.py
 pause
 ```
 
@@ -140,7 +140,7 @@ KAANH_Digital_Twin 的日志输出被重定向到 UI 的 LogPanel，同时也写
 
 ```bat
 set LIBGL_ALWAYS_SOFTWARE=1
-python -m KAANH_Digital_Twin.app
+python KAANH_Digital_Twin_launcher.py
 ```
 
 ### 6.2 WebSocket 能连上，但 UDP 轨迹执行报错 / 机器人不动作

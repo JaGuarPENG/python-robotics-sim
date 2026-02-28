@@ -48,7 +48,7 @@ pip install -r requirements.txt
 
 ```bash
 # 启动 KAANH_Digital_Twin
-python -m KAANH_Digital_Twin.app
+python KAANH_Digital_Twin_launcher.py
 ```
 
 ## 基本使用
