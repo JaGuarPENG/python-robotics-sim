@@ -94,6 +94,7 @@ python-robotics-sim/
 
 - [架构设计文档](./ARCHITECTURE.md) - 系统架构、模块交互与核心设计决策
 - [API 接口文档](./API.md) - 硬件通信协议(WebSocket/UDP)与内部服务接口
+- [函数参考手册](./FUNCTION_REFERENCE.md) - 核心类与函数快速查阅指南
 - [开发指南](./DEVELOPMENT.md) - 代码规范、新增功能面板教程与调试技巧
 - [部署运维文档](./DEPLOYMENT.md) - 现场环境部署与网络排错手册
 
