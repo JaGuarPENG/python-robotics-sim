@@ -27,7 +27,7 @@ pip install -r requirements.txt
 pip install PyQt5 pyvista numpy pandas scipy
 
 # 4. 启动开发服务器（主界面）
-python -m teach_pendant.app  # 启动 KAANH_Digital_Twin
+python -m KAANH_Digital_Twin.app  # 启动 KAANH_Digital_Twin
 ```
 
 ## 2. 项目结构说明
@@ -35,7 +35,7 @@ python -m teach_pendant.app  # 启动 KAANH_Digital_Twin
 ### 2.1 目录结构
 
 ```
-teach_pendant/  # KAANH_Digital_Twin 源码目录
+KAANH_Digital_Twin/  # 源码目录
 ├── app.py                 # 应用入口
 ├── main_window.py         # 主窗口
 ├── robot_controller.py    # 机器人控制器
@@ -89,7 +89,7 @@ KAANH_Digital_Twin 最基础的开发准则：**严禁在 UI (Main Thread) 中�
 
 ### 3.3 多线程安全 (Signal-Driven)
 
-由于后台线程无法直接修改 PyQt 控件（如 `QLabel.setText()`），我们利用 `teach_pendant/signals.py` 作为 KAANH_Digital_Twin 的统一事件总线：
+由于后台线程无法直接修改 PyQt 控件（如 `QLabel.setText()`），我们利用 `KAANH_Digital_Twin/signals.py` 作为 KAANH_Digital_Twin 的统一事件总线：
 
 **错误示范（将导致崩溃）**：
 ```python
@@ -144,7 +144,7 @@ class RobotController:
 
 假设你需要开发一个控制外部夹爪的 `GripperPanel`。
 
-**步骤 1：在 `teach_pendant/ui/` (KAANH_Digital_Twin UI 目录) 下创建 `gripper_panel.py`**
+**步骤 1：在 `KAANH_Digital_Twin/ui/` (UI 目录) 下创建 `gripper_panel.py`**
 
 ```python
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton
@@ -176,7 +176,7 @@ class GripperPanel(QWidget):
 
 **步骤 2：将新面板注册到主窗口**
 
-打开 `teach_pendant/main_window.py`，在 `init_ui` 方法的 Tab 页组装部分：
+打开 `KAANH_Digital_Twin/main_window.py`，在 `init_ui` 方法的 Tab 页组装部分：
 
 ```python
 from .ui.gripper_panel import GripperPanel
@@ -190,7 +190,7 @@ advanced_layout.addWidget(self.gripper_panel)
 
 如果底层控制器新增了特定的 JSON-RPC 指令（例如修改加速度）。
 
-打开 `teach_pendant/robot_controller.py`，增加封装函数：
+打开 `KAANH_Digital_Twin/robot_controller.py`，增加封装函数：
 
 ```python
 def set_global_acceleration(self, acc_percent: int):

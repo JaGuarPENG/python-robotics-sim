@@ -48,7 +48,7 @@ pip install -r requirements.txt
 
 ```bash
 # 启动 KAANH_Digital_Twin
-python -m teach_pendant.app
+python -m KAANH_Digital_Twin.app
 ```
 
 ## 基本使用
@@ -69,7 +69,7 @@ python -m teach_pendant.app
 
 ```text
 python-robotics-sim/
-├── teach_pendant/               # KAANH_Digital_Twin 核心功能与前端界面目录
+├── KAANH_Digital_Twin/          # KAANH_Digital_Twin 核心功能与前端界面目录
 │   ├── app.py                   # 应用程序入口，负责 QApplication 的初始化及深色主题样式配置
 │   ├── main_window.py           # KAANH_Digital_Twin 主窗口，负责各功能面板（UI）与业务服务（Logic）的集成与跨线程调度
 │   ├── robot_controller.py      # 硬件抽象网关，封装 WebSocket 基础指令与 UDP 高速指令的收发逻辑

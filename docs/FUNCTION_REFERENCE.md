@@ -1,6 +1,6 @@
 # KAANH_Digital_Twin 函数参考手册
 
-本文档汇总 `KAANH_Digital_Twin` (代码目录 `teach_pendant`) 模块下所有核心文件的类与函数说明，便于快速查阅。
+本文档汇总 `KAANH_Digital_Twin` 模块下所有核心文件的类与函数说明，便于快速查阅。
 
 ---
 

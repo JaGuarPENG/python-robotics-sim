@@ -1,5 +1,5 @@
 """
-机器人示教器 GUI - 启动脚本
+机器人数字孪生仿真平台 GUI - 启动脚本
 
 功能：
 1. 连接机器人控制器 (WebSocket 5999端口)
@@ -16,10 +16,10 @@
 使用方法:
     python teach_pendant.py
     或
-    python -m teach_pendant
+    python -m KAANH_Digital_Twin
 """
 
-from teach_pendant import main
+from KAANH_Digital_Twin import main
 
 if __name__ == "__main__":
     main()

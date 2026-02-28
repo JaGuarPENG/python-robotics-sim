@@ -12,7 +12,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from simulation import config
-from teach_pendant.logic.vision_service import VisionService
+from KAANH_Digital_Twin.logic.vision_service import VisionService
 
 def main():
     print("=== 视觉集成测试启动 ===")

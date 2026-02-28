@@ -16,7 +16,7 @@
 使用方法:
     python -m teach_pendant
     或
-    python teach_pendant.py
+    python -m KAANH_Digital_Twin
 """
 
 from .config import (
