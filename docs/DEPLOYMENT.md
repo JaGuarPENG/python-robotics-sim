@@ -8,24 +8,24 @@ KAANH 示教器虽然是一个基于 PyQt 的桌面端应用程序，但在工�
 
 ```mermaid
 graph LR
-    subgraph 示教器终端["示教器终端 (工控机/笔记本)"]
+    subgraph TeachPendant["示教器终端 (工控机/笔记本)"]
         App[Teach Pendant APP]
         Env[Python 虚拟环境]
         App --> Env
     end
 
-    subgraph 现场网络["现场网络"]
+    subgraph Network["现场网络"]
         Switch[千兆工业交换机]
     end
 
-    subgraph 机器人电控柜["机器人电控柜"]
+    subgraph RobotController["机器人电控柜"]
         Controller[Robot Controller]
         Robot[(6轴机械臂)]
         Controller --> Robot
     end
 
-    App <-->|WebSocket 端口 (例如:8080)| Switch
-    App <-->|UDP 端口 (例如:30003)| Switch
+    App <-->|"WebSocket:8080"| Switch
+    App <-->|"UDP:30003"| Switch
     Switch <--> Controller
 ```
 
