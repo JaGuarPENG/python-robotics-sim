@@ -2,7 +2,7 @@
 
 # --- 真实视觉系统配置 ---
 VISION_MODE = True         # 是否使用真实视觉系统 (True: 真实视觉; False: 虚拟轨迹)
-VISION_SOURCE = 'camera_1/data/circle_test.mp4'  # 视频文件路径 或 相机ID (如 0)
+VISION_SOURCE = 'cameras/camera_02/data/circle_test.mp4'  # 视频文件路径 或 相机ID (如 0)
 VISION_UPDATE_INTERVAL = 0.02  # 视觉系统更新目标间隔 (秒)，例如 10ms
 # 注意：这只是为了控制处理频率，不代表一定要等待这么久
 
@@ -12,7 +12,7 @@ YOLO_WEIGHTS_PATH = 'model/best.pt'  # YOLO 模型权重路径
 YOLO_CONF_THRESHOLD = 0.7  # YOLO 置信度阈值
 YOLO_IOU_THRESHOLD = 0.45  # YOLO NMS IOU 阈值
 
-CAMERA_CALIBRATION_FILE = "camera_1/calib/calibration_data.npz" # 标定文件路径
+CAMERA_CALIBRATION_FILE = "cameras/camera_02/calib/calibration_data.npz" # 标定文件路径
 
 # Aruco 标记真实尺寸 (mm) - 用于位姿估计
 ARUCO_MARKER_SIZE = 95.0  # 标记边长 (毫米)

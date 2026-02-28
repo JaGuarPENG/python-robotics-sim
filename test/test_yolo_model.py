@@ -5,7 +5,7 @@ YOLOv5s 模型权重测试脚本
 
 使用方法:
     pip install ultralytics
-    python tools/test_yolo_model.py --source camera_1/data/circle_test.mp4
+    python tools/test_yolo_model.py --source cameras/camera_02/data/circle_test.mp4
 """
 
 import sys
