@@ -61,14 +61,19 @@ class ConveyorTrackingService(QObject):
         
         self.approach_speed_z = 0.05    # Z轴逼近/复位速度: 0.05m/s (50mm/s)
         self.conveyor_speed_y = 0.05    # [优化] 传送带默认速度: 0.05m/s
-        self.xy_threshold = 0.001       # [优化] 水平误差阈值 3mm
+        self.xy_threshold = 0.001       # [优化] 水平误差阈值放宽至 5mm，防止速度过快时无法稳定触发
         self.blind_xy_threshold = 0.001 # [新增] 盲抓触发的极小误差阈值 (如5mm以内直接触发)
         
         # === 动态前馈参数 (适配125Hz控制频率) ===
         # 125Hz下预瞄6帧约48ms，与60Hz下3帧约50ms等效
         self.look_ahead_frames = 6.0    # 125Hz 控制周期下的预瞄帧数
-        self.system_latency_offset = 0.02 # 系统的隐性延迟系数
-        
+
+        # === PI 控制器参数 (Y轴跟踪) ===
+        self.pi_kp = 0.8  # 比例系数: 误差多大，补偿多少
+        self.pi_ki = 0.1  # 积分系数: 消除稳态误差
+        self.pi_integral_y = 0.0 # Y轴误差积分累计
+        self.pi_compensation_y = 0.0 # 最终PI计算出的Y轴补偿量
+
         # === 初始位置 (快速定位1) ===
         self.home_joints = [0, -15, 105, 0, -90, 0] # 角度
 
@@ -129,9 +134,9 @@ class ConveyorTrackingService(QObject):
                 # ==========================
                 # 前馈速度补偿与截击 (Feedforward & Intercept)
                 # ==========================
-                # [优化] 使用纯理论物理公式： 预测位置 = 当前位置 + 速度 * (通信与处理时间 + 机械响应延时)
-                total_latency_seconds = (self.control_interval * self.look_ahead_frames) + self.system_latency_offset
-                predicted_target_y = target_pos[1] + (self.conveyor_speed_y * total_latency_seconds)
+                # 基础物理预判 (固定的前馈时间，大约为预瞄加通信时间)
+                base_feedforward_time = (self.control_interval * self.look_ahead_frames) + 0.05
+                base_predicted_y = target_pos[1] + (self.conveyor_speed_y * base_feedforward_time)
                 
                 # 获取真实 TCP 用于计算误差 (单位转换: mm -> m)
                 tcp_mm = self.controller.state.get_tcp()
@@ -141,6 +146,32 @@ class ConveyorTrackingService(QObject):
                 error_x = tcp_m[0] - target_pos[0]
                 error_y = tcp_m[1] - target_pos[1]
                 real_xy_distance = math.sqrt(error_x**2 + error_y**2)
+
+                # ==========================
+                # PI 闭环补偿控制 (仅在 Y 轴方向)
+                # ==========================
+                # 目标：让机械臂在 Y 轴跟上小球，即 error_y -> 0
+                # 如果小球比机械臂更靠前(沿着Y轴正方向跑)，error_y 为负，我们需要把预测点再往前推一点。
+                # 所以我们期望机械臂的 Y > 现在的 TCP Y，即补偿量为负的 error_y 相关项。
+                
+                if self.state in ["HOVERING", "APPROACHING"]:
+                    # 计算 PI 补偿
+                    self.pi_integral_y += error_y * self.vision_interval
+                    
+                    # 限制积分饱和 (防积分风饱和)
+                    max_integral = 0.2  # 最大积分为20cm
+                    self.pi_integral_y = max(-max_integral, min(max_integral, self.pi_integral_y))
+                    
+                    # 计算控制输出: P * 误差 + I * 积分
+                    # 如果小球在前面 (target_y > tcp_y)，error_y 为负。我们需要增加 predicted_y，所以减去 error_y。
+                    self.pi_compensation_y = - (self.pi_kp * error_y + self.pi_ki * self.pi_integral_y)
+                else:
+                    # 如果丢失或在复位，清空积分器
+                    self.pi_integral_y = 0.0
+                    self.pi_compensation_y = 0.0
+                    
+                # 最终预测目标 = 基础前馈位置 + PI 动态补偿
+                predicted_target_y = base_predicted_y + self.pi_compensation_y
 
                 # ==========================
                 # 状态机核心控制流
