@@ -65,6 +65,22 @@ class TrajectoryGeneratorPanel(QWidget):
         start_coord_layout.addStretch()
         start_layout.addLayout(start_coord_layout)
         
+        # 起点姿态输入
+        start_rpy_layout = QHBoxLayout()
+        start_rpy_layout.addWidget(QLabel("姿态 Rx/Ry/Rz(°):"))
+        self.start_rpy_inputs = []
+        for i, (label, default) in enumerate(zip(['Rx:', 'Ry:', 'Rz:'], [180.0, 0.0, 0.0])):
+            start_rpy_layout.addWidget(QLabel(label))
+            spin = QDoubleSpinBox()
+            spin.setRange(-360, 360)
+            spin.setDecimals(2)
+            spin.setValue(default)
+            spin.setMinimumWidth(80)
+            self.start_rpy_inputs.append(spin)
+            start_rpy_layout.addWidget(spin)
+        start_rpy_layout.addStretch()
+        start_layout.addLayout(start_rpy_layout)
+        
         # 起点操作按钮
         start_btn_layout = QHBoxLayout()
         self.set_start_current_btn = QPushButton("📍 设为当前位置")
@@ -73,7 +89,7 @@ class TrajectoryGeneratorPanel(QWidget):
         
         self.pick_start_btn = QPushButton("🔍 从3D视图选取")
         self.pick_start_btn.clicked.connect(lambda: self.pick_from_view('start'))
-        self.pick_start_btn.setEnabled(False)  # 暂时禁用，需要3D视图支持
+        self.pick_start_btn.setEnabled(False)
         start_btn_layout.addWidget(self.pick_start_btn)
         
         start_btn_layout.addStretch()
@@ -110,6 +126,22 @@ class TrajectoryGeneratorPanel(QWidget):
         end_coord_layout.addStretch()
         end_layout.addLayout(end_coord_layout)
         
+        # 终点姿态输入
+        end_rpy_layout = QHBoxLayout()
+        end_rpy_layout.addWidget(QLabel("姿态 Rx/Ry/Rz(°):"))
+        self.end_rpy_inputs = []
+        for i, (label, default) in enumerate(zip(['Rx:', 'Ry:', 'Rz:'], [180.0, 0.0, 0.0])):
+            end_rpy_layout.addWidget(QLabel(label))
+            spin = QDoubleSpinBox()
+            spin.setRange(-360, 360)
+            spin.setDecimals(2)
+            spin.setValue(default)
+            spin.setMinimumWidth(80)
+            self.end_rpy_inputs.append(spin)
+            end_rpy_layout.addWidget(spin)
+        end_rpy_layout.addStretch()
+        end_layout.addLayout(end_rpy_layout)
+        
         # 终点操作按钮
         end_btn_layout = QHBoxLayout()
         self.set_end_current_btn = QPushButton("📍 设为当前位置")
@@ -125,6 +157,34 @@ class TrajectoryGeneratorPanel(QWidget):
         end_layout.addLayout(end_btn_layout)
         end_group.setLayout(end_layout)
         layout.addWidget(end_group)
+        
+        # ==================== 工具偏置设置 ====================
+        tool_offset_group = QGroupBox("工具偏置")
+        tool_offset_layout = QHBoxLayout()
+        
+        tool_offset_layout.addWidget(QLabel("工具长度:"))
+        self.tool_length_spin = QDoubleSpinBox()
+        self.tool_length_spin.setRange(-200, 200)
+        self.tool_length_spin.setDecimals(1)
+        self.tool_length_spin.setValue(50.0)  # 默认50mm
+        self.tool_length_spin.setSuffix(" mm")
+        self.tool_length_spin.setToolTip("法兰盘到工具尖端的距离，rx=180时Z轴偏移")
+        self.tool_length_spin.setMinimumWidth(120)
+        tool_offset_layout.addWidget(self.tool_length_spin)
+        
+        tool_offset_layout.addWidget(QLabel("方向:"))
+        self.tool_offset_axis = QComboBox()
+        self.tool_offset_axis.addItems(["Z轴 (rx=180向下)", "Z轴 (rx=0向上)", "X轴", "Y轴", "无偏置"])
+        self.tool_offset_axis.setMinimumWidth(150)
+        tool_offset_layout.addWidget(self.tool_offset_axis)
+        
+        tool_offset_info = QLabel("💡 轨迹点 = 输入点 - 工具偏置 (工具尖端位置)")
+        tool_offset_info.setStyleSheet("color: #7f8c8d;")
+        tool_offset_layout.addWidget(tool_offset_info)
+        
+        tool_offset_layout.addStretch()
+        tool_offset_group.setLayout(tool_offset_layout)
+        layout.addWidget(tool_offset_group)
         
         # ==================== 插补参数 ====================
         interp_group = QGroupBox("插补参数")
@@ -193,10 +253,16 @@ class TrajectoryGeneratorPanel(QWidget):
         self.total_time_label.setStyleSheet("color: #2ecc71; font-weight: bold; min-width: 80px;")
         info_layout.addWidget(self.total_time_label)
         
-        # 姿态固定提示
-        orientation_info = QLabel("⚠ 姿态固定: Rx=180°, Ry=0°, Rz=0°")
-        orientation_info.setStyleSheet("color: #e74c3c; font-weight: bold;")
-        info_layout.addWidget(orientation_info)
+        # 姿态控制按钮
+        self.fix_orientation_btn = QPushButton("🔒 固定姿态 180,0,0")
+        self.fix_orientation_btn.setCheckable(True)
+        self.fix_orientation_btn.setChecked(False)
+        self.fix_orientation_btn.clicked.connect(self.on_fix_orientation_toggled)
+        self.fix_orientation_btn.setStyleSheet("""
+            QPushButton { background-color: #95a5a6; color: white; }
+            QPushButton:checked { background-color: #e74c3c; }
+        """)
+        info_layout.addWidget(self.fix_orientation_btn)
         
         info_layout.addStretch()
         layout.addLayout(info_layout)
@@ -252,26 +318,30 @@ class TrajectoryGeneratorPanel(QWidget):
         layout.addStretch()
     
     def set_start_from_current(self):
-        """从机器人当前位置设置起点（只取位置，姿态固定180,0,0）"""
+        """从机器人当前位置设置起点（位置和姿态）"""
         if self.controller and self.controller.actual_tcp:
             tcp = self.controller.actual_tcp
-            # 只取前3个值（位置），姿态固定为180,0,0
+            # 设置位置
             for i in range(3):
                 self.start_inputs[i].setValue(tcp[i])
-            # 保存完整点（位置+固定姿态）
-            self.start_point = [tcp[0], tcp[1], tcp[2], 180.0, 0.0, 0.0]
+            # 设置姿态（如果姿态输入框是启用的）
+            if self.start_rpy_inputs[0].isEnabled():
+                for i in range(3):
+                    self.start_rpy_inputs[i].setValue(tcp[3+i])
         else:
             QMessageBox.warning(self, "警告", "无法获取机器人当前位置，请确保机器人已连接并使能")
     
     def set_end_from_current(self):
-        """从机器人当前位置设置终点（只取位置，姿态固定180,0,0）"""
+        """从机器人当前位置设置终点（位置和姿态）"""
         if self.controller and self.controller.actual_tcp:
             tcp = self.controller.actual_tcp
-            # 只取前3个值（位置），姿态固定为180,0,0
+            # 设置位置
             for i in range(3):
                 self.end_inputs[i].setValue(tcp[i])
-            # 保存完整点（位置+固定姿态）
-            self.end_point = [tcp[0], tcp[1], tcp[2], 180.0, 0.0, 0.0]
+            # 设置姿态（如果姿态输入框是启用的）
+            if self.end_rpy_inputs[0].isEnabled():
+                for i in range(3):
+                    self.end_rpy_inputs[i].setValue(tcp[3+i])
         else:
             QMessageBox.warning(self, "警告", "无法获取机器人当前位置，请确保机器人已连接并使能")
     
@@ -280,14 +350,16 @@ class TrajectoryGeneratorPanel(QWidget):
         QMessageBox.information(self, "提示", "请在3D视图中点击选择点位\n(功能开发中)")
     
     def get_start_point(self):
-        """获取起点坐标（位置+固定姿态180,0,0）"""
+        """获取起点完整位姿 [x, y, z, rx, ry, rz]"""
         pos = [spin.value() for spin in self.start_inputs]
-        return pos + [180.0, 0.0, 0.0]  # 固定姿态
+        rpy = [spin.value() for spin in self.start_rpy_inputs]
+        return pos + rpy
     
     def get_end_point(self):
-        """获取终点坐标（位置+固定姿态180,0,0）"""
+        """获取终点完整位姿 [x, y, z, rx, ry, rz]"""
         pos = [spin.value() for spin in self.end_inputs]
-        return pos + [180.0, 0.0, 0.0]  # 固定姿态
+        rpy = [spin.value() for spin in self.end_rpy_inputs]
+        return pos + rpy
     
     def get_speed_mm_s(self):
         """获取速度，统一转换为 mm/s"""
@@ -346,6 +418,20 @@ class TrajectoryGeneratorPanel(QWidget):
     def on_speed_changed(self):
         """速度改变时触发（预留）"""
         pass
+    
+    def on_fix_orientation_toggled(self, checked):
+        """固定姿态按钮切换"""
+        if checked:
+            self.fix_orientation_btn.setText("🔒 姿态已固定 180,0,0")
+            # 禁用姿态输入框
+            for spin in self.start_rpy_inputs + self.end_rpy_inputs:
+                spin.setEnabled(False)
+                spin.setValue(180.0 if spin == self.start_rpy_inputs[0] or spin == self.end_rpy_inputs[0] else 0.0)
+        else:
+            self.fix_orientation_btn.setText("🔓 固定姿态 180,0,0")
+            # 启用姿态输入框
+            for spin in self.start_rpy_inputs + self.end_rpy_inputs:
+                spin.setEnabled(True)
     
     def calculate_points_from_speed(self):
         """
@@ -454,24 +540,60 @@ class TrajectoryGeneratorPanel(QWidget):
         """
         直线插补（姿态固定为 Rx=180, Ry=0, Rz=0）
         p1, p2: [x, y, z, rx, ry, rz] - 但姿态会被忽略，使用固定值
-        返回: 插值点列表
+        返回: 插值点列表（已应用工具偏置）
         """
         points = []
+        
+        # 获取工具偏置参数
+        tool_length = self.tool_length_spin.value()
+        offset_axis = self.tool_offset_axis.currentText()
         
         for i in range(num_points):
             t = i / (num_points - 1)  # 0 到 1
             
-            # 位置线性插值
-            x = p1[0] + (p2[0] - p1[0]) * t
-            y = p1[1] + (p2[1] - p1[1]) * t
-            z = p1[2] + (p2[2] - p1[2]) * t
+            # 位置线性插值（目标点位置 - 工具尖端想要到达的位置）
+            x_target = p1[0] + (p2[0] - p1[0]) * t
+            y_target = p1[1] + (p2[1] - p1[1]) * t
+            z_target = p1[2] + (p2[2] - p1[2]) * t
             
-            # 姿态固定为 180, 0, 0
-            rx, ry, rz = 180.0, 0.0, 0.0
+            # 应用工具偏置
+            # 注意：用户输入的起点/终点是法兰盘位置
+            # 生成的轨迹点是"加了工具长度"后的点（工具尖端位置）
+            if offset_axis == "Z轴 (rx=180向下)":
+                # rx=180时工具Z轴朝下，工具尖端在法兰盘下方
+                x, y, z = x_target, y_target, z_target - tool_length
+            elif offset_axis == "Z轴 (rx=0向上)":
+                # rx=0时工具Z轴朝上，工具尖端在法兰盘上方
+                x, y, z = x_target, y_target, z_target + tool_length
+            elif offset_axis == "X轴":
+                x, y, z = x_target - tool_length, y_target, z_target
+            elif offset_axis == "Y轴":
+                x, y, z = x_target, y_target - tool_length, z_target
+            else:  # 无偏置
+                x, y, z = x_target, y_target, z_target
+            
+            # 姿态处理
+            if self.fix_orientation_btn.isChecked():
+                # 固定姿态为 180, 0, 0
+                rx, ry, rz = 180.0, 0.0, 0.0
+            else:
+                # 姿态插值（使用起点/终点的姿态）
+                rx = self._interp_angle(p1[3], p2[3], t)
+                ry = self._interp_angle(p1[4], p2[4], t)
+                rz = self._interp_angle(p1[5], p2[5], t)
             
             points.append([x, y, z, rx, ry, rz])
         
         return points
+    
+    def _interp_angle(self, a1, a2, t):
+        """角度插值（处理-180到180环绕）"""
+        diff = a2 - a1
+        while diff > 180:
+            diff -= 360
+        while diff < -180:
+            diff += 360
+        return a1 + diff * t
     
     def calculate_distance(self, p1, p2):
         """计算两点之间的距离"""
@@ -484,22 +606,37 @@ class TrajectoryGeneratorPanel(QWidget):
         
         num_points = self.num_points_spin.value()
         
-        # 生成轨迹点（姿态固定180,0,0）
+        # 生成轨迹点（姿态固定180,0,0，已应用工具偏置）
         self.generated_points = self.linear_interpolate(p1, p2, num_points)
         
         # 更新表格
         self.update_table()
         
-        # 更新统计
-        distance = self.calculate_distance(p1, p2)
+        # 计算统计信息
+        distance = self.calculate_distance(p1, p2)  # 目标点之间的距离
         frequency = self.frequency_spin.value()
         time_step = 1.0 / frequency
         total_time = (num_points - 1) * time_step
         actual_speed = distance / total_time if total_time > 0 else 0
         
-        self.stats_label.setText(f"距离: {distance:.2f}mm | 点数: {num_points} | "
-                                f"频率: {frequency}Hz | 时间: {total_time:.2f}s | "
-                                f"速度: {actual_speed:.1f}mm/s")
+        # 获取工具偏置信息
+        tool_length = self.tool_length_spin.value()
+        offset_axis = self.tool_offset_axis.currentText()
+        
+        # 构建状态文本
+        stats_text = f"目标距离: {distance:.1f}mm | 点数: {num_points} | "
+        stats_text += f"频率: {frequency}Hz | 总时间: {total_time:.2f}s | 速度: {actual_speed:.1f}mm/s"
+        
+        if offset_axis != "无偏置":
+            # 显示输入点和生成的轨迹点（工具尖端）的Z坐标
+            input_z_start = p1[2]  # 用户输入的起点Z（法兰盘）
+            input_z_end = p2[2]    # 用户输入的终点Z（法兰盘）
+            if "Z轴" in offset_axis:
+                tip_z_start = self.generated_points[0][2]  # 生成的轨迹点Z（工具尖端）
+                tip_z_end = self.generated_points[-1][2]
+                stats_text += f"\n输入法兰盘Z: {input_z_start:.1f}~{input_z_end:.1f}mm | 生成轨迹(工具尖端)Z: {tip_z_start:.1f}~{tip_z_end:.1f}mm"
+        
+        self.stats_label.setText(stats_text)
         
         # 在3D视图中显示
         if self.robot_view:
@@ -573,7 +710,11 @@ class TrajectoryGeneratorPanel(QWidget):
             time_step = 1.0 / frequency
             df['时间戳(秒)'] = [i * time_step for i in range(len(df))]
             
-            # 添加频率信息到注释
+            # 获取工具偏置信息
+            tool_length = self.tool_length_spin.value()
+            offset_axis = self.tool_offset_axis.currentText()
+            
+            # 计算统计信息
             distance = self.calculate_distance(self.generated_points[0], self.generated_points[-1])
             total_time = (len(self.generated_points) - 1) * time_step
             actual_speed = distance / total_time
@@ -581,8 +722,19 @@ class TrajectoryGeneratorPanel(QWidget):
             # 确保目录存在
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             
-            # 保存
+            # 保存（带注释说明工具偏置）
             df.to_csv(file_path, index=False, encoding='utf-8-sig')
+            
+            # 准备提示信息
+            offset_info = ""
+            if offset_axis != "无偏置":
+                offset_info = f"\n工具偏置: {tool_length}mm ({offset_axis})"
+                if "Z轴" in offset_axis:
+                    # 输入的法兰盘Z
+                    input_z = self.get_start_point()[2]
+                    # 生成的轨迹点Z（工具尖端）
+                    tip_z = self.generated_points[0][2]
+                    offset_info += f"\n输入法兰盘Z: {input_z:.1f}mm | 生成轨迹(工具尖端)Z: {tip_z:.1f}mm"
             
             QMessageBox.information(
                 self, 
@@ -593,6 +745,8 @@ class TrajectoryGeneratorPanel(QWidget):
                 f"时间间隔: {time_step*1000:.1f}ms\n"
                 f"预计总时间: {total_time:.2f}s\n"
                 f"实际速度: {actual_speed:.1f}mm/s"
+                f"{offset_info}\n\n"
+                f"⚠️ 注意: CSV中的坐标是工具尖端位置！"
             )
             
         except Exception as e:
