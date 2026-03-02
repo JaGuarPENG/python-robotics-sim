@@ -18,7 +18,7 @@ class TrajectoryGeneratorPanel(QWidget):
     """两点直线轨迹生成器面板"""
     
     # 信号：轨迹生成完成
-    trajectory_generated = pyqtSignal(list)  # 发射轨迹点列表
+    trajectory_generated = pyqtSignal(list, float)  # 发射(轨迹点列表, 时间间隔)
     
     def __init__(self, robot_view=None, controller=None):
         super().__init__()
@@ -130,34 +130,31 @@ class TrajectoryGeneratorPanel(QWidget):
         interp_group = QGroupBox("插补参数")
         interp_layout = QHBoxLayout()
         
-        # 点数
-        interp_layout.addWidget(QLabel("插补点数:"))
-        self.num_points_spin = QSpinBox()
-        self.num_points_spin.setRange(2, 10000)
-        self.num_points_spin.setValue(50)
-        self.num_points_spin.setMinimumWidth(80)
-        self.num_points_spin.valueChanged.connect(self.on_param_changed)
-        interp_layout.addWidget(self.num_points_spin)
+        # 固定频率设置
+        interp_layout.addWidget(QLabel("发送频率:"))
+        self.frequency_spin = QDoubleSpinBox()
+        self.frequency_spin.setRange(10, 125)  # 工控机最大125Hz
+        self.frequency_spin.setDecimals(0)
+        self.frequency_spin.setValue(125)  # 默认最大频率
+        self.frequency_spin.setSuffix(" Hz")
+        self.frequency_spin.setMinimumWidth(100)
+        self.frequency_spin.setToolTip("工控机最大接收频率为125Hz")
+        interp_layout.addWidget(self.frequency_spin)
         
-        # 时间间隔
-        interp_layout.addWidget(QLabel("时间间隔(s):"))
-        self.time_step_spin = QDoubleSpinBox()
-        self.time_step_spin.setRange(0.001, 10.0)
-        self.time_step_spin.setDecimals(4)
-        self.time_step_spin.setValue(0.01)
-        self.time_step_spin.setMinimumWidth(80)
-        self.time_step_spin.valueChanged.connect(self.on_time_step_changed)
-        interp_layout.addWidget(self.time_step_spin)
+        # 计算出的时间间隔（只读显示）
+        interp_layout.addWidget(QLabel("时间间隔:"))
+        self.time_step_label = QLabel("8.0 ms")
+        self.time_step_label.setStyleSheet("color: #3498db; font-weight: bold; min-width: 80px;")
+        interp_layout.addWidget(self.time_step_label)
         
-        # 速度设置
-        interp_layout.addWidget(QLabel("速度(mm/s):"))
+        # 速度设置（主要输入）
+        interp_layout.addWidget(QLabel("目标速度:"))
         self.speed_spin = QDoubleSpinBox()
-        self.speed_spin.setRange(0.1, 1000.0)
+        self.speed_spin.setRange(0.1, 500.0)
         self.speed_spin.setDecimals(1)
         self.speed_spin.setValue(50.0)  # 默认50mm/s
         self.speed_spin.setSuffix(" mm/s")
         self.speed_spin.setMinimumWidth(120)
-        self.speed_spin.valueChanged.connect(self.on_speed_changed)
         interp_layout.addWidget(self.speed_spin)
         
         # 速度单位切换
@@ -167,10 +164,10 @@ class TrajectoryGeneratorPanel(QWidget):
         self.speed_unit_combo.currentIndexChanged.connect(self.on_speed_unit_changed)
         interp_layout.addWidget(self.speed_unit_combo)
         
-        # 自动计算按钮
-        self.calc_btn = QPushButton("🔄 根据速度计算")
-        self.calc_btn.setToolTip("根据设置的速度、轨迹长度自动计算时间间隔")
-        self.calc_btn.clicked.connect(self.calculate_from_speed)
+        # 计算点数按钮
+        self.calc_btn = QPushButton("🔄 计算插补点数")
+        self.calc_btn.setToolTip("根据速度、距离、固定频率自动计算所需插补点数")
+        self.calc_btn.clicked.connect(self.calculate_points_from_speed)
         self.calc_btn.setStyleSheet("background-color: #9b59b6; color: white;")
         interp_layout.addWidget(self.calc_btn)
         
@@ -178,13 +175,31 @@ class TrajectoryGeneratorPanel(QWidget):
         interp_group.setLayout(interp_layout)
         layout.addWidget(interp_group)
         
-        # 姿态固定提示（移到下一行）
-        orientation_layout = QHBoxLayout()
+        # 第二行：插补点数显示和姿态提示
+        info_layout = QHBoxLayout()
+        
+        # 插补点数（计算结果，可手动微调）
+        info_layout.addWidget(QLabel("插补点数:"))
+        self.num_points_spin = QSpinBox()
+        self.num_points_spin.setRange(2, 10000)
+        self.num_points_spin.setValue(50)
+        self.num_points_spin.setMinimumWidth(100)
+        self.num_points_spin.valueChanged.connect(self.on_points_changed)
+        info_layout.addWidget(self.num_points_spin)
+        
+        # 预计总时间
+        info_layout.addWidget(QLabel("预计总时间:"))
+        self.total_time_label = QLabel("-- s")
+        self.total_time_label.setStyleSheet("color: #2ecc71; font-weight: bold; min-width: 80px;")
+        info_layout.addWidget(self.total_time_label)
+        
+        # 姿态固定提示
         orientation_info = QLabel("⚠ 姿态固定: Rx=180°, Ry=0°, Rz=0°")
         orientation_info.setStyleSheet("color: #e74c3c; font-weight: bold;")
-        orientation_layout.addWidget(orientation_info)
-        orientation_layout.addStretch()
-        layout.addLayout(orientation_layout)
+        info_layout.addWidget(orientation_info)
+        
+        info_layout.addStretch()
+        layout.addLayout(info_layout)
         
         # ==================== 操作按钮 ====================
         action_group = QGroupBox("操作")
@@ -309,43 +324,38 @@ class TrajectoryGeneratorPanel(QWidget):
             self.speed_spin.setValue(current / 1000.0)
             self.speed_spin.setSuffix(" m/s")
     
-    def on_param_changed(self):
-        """插补点数改变时，保持速度不变，自动重新计算时间间隔"""
-        # 获取当前速度
-        speed = self.get_speed_mm_s()
-        if speed < 0.01:
-            return
+    def on_points_changed(self):
+        """插补点数改变时，更新预计总时间"""
+        frequency = self.frequency_spin.value()
+        num_points = self.num_points_spin.value()
+        time_step = 1.0 / frequency
         
+        # 计算总时间
+        total_time = (num_points - 1) * time_step
+        self.total_time_label.setText(f"{total_time:.3f} s")
+        
+        # 更新距离和速度信息
         p1 = self.get_start_point()
         p2 = self.get_end_point()
         distance = self.calculate_distance(p1, p2)
         
-        if distance < 0.01:
-            return
-        
-        num_points = self.num_points_spin.value()
-        
-        # 保持速度不变，重新计算时间间隔
-        total_time = distance / speed
-        time_step = total_time / (num_points - 1)
-        
-        # 更新时间间隔（阻断信号防止循环）
-        self.time_step_spin.blockSignals(True)
-        self.time_step_spin.setValue(time_step)
-        self.time_step_spin.blockSignals(False)
+        if distance > 0.01:
+            actual_speed = distance / total_time
+            # 可以在这里显示实际速度
     
-    def on_time_step_changed(self):
-        """时间间隔改变时，可以反算当前速度（仅显示用）"""
-        # 可以选择在这里显示当前速度
+    def on_speed_changed(self):
+        """速度改变时触发（预留）"""
         pass
     
-    def calculate_from_speed(self):
+    def calculate_points_from_speed(self):
         """
-        根据设置的速度自动计算时间间隔
-        核心公式: 总时间 = 轨迹长度 / 速度
-                 时间间隔 = 总时间 / (插补点数 - 1)
+        根据设置的速度和固定频率，自动计算所需插补点数
         
-        这样无论插补点数多少，机器人末端的平均运动速度都是固定的
+        核心公式: 
+        - 总时间 = 轨迹长度 / 速度
+        - 需要的点数 = 总时间 * 频率 + 1
+        
+        这样能以固定频率(如125Hz)发送，达到目标速度
         """
         p1 = self.get_start_point()
         p2 = self.get_end_point()
@@ -364,69 +374,81 @@ class TrajectoryGeneratorPanel(QWidget):
             QMessageBox.warning(self, "警告", "速度设置太小")
             return
         
-        # 获取插补点数
-        num_points = self.num_points_spin.value()
+        # 获取固定频率
+        frequency = self.frequency_spin.value()  # Hz
+        time_step = 1.0 / frequency  # 秒
         
         # ============================================
         # 核心计算逻辑
         # ============================================
-        # 1. 计算总时间 (固定，由距离和速度决定)
+        # 1. 计算总时间 (由距离和速度决定)
         total_time = distance / speed  # 秒
         
-        # 2. 计算时间间隔 (由总时间和插补点数决定)
-        # 如果有N个点，则有N-1个间隔
-        time_step = total_time / (num_points - 1)
+        # 2. 计算需要的插补点数
+        # N个点有N-1个间隔，每个间隔1/frequency秒
+        # 总时间 = (N-1) * (1/frequency)
+        # N = 总时间 * frequency + 1
+        num_points = int(total_time * frequency) + 1
         
-        # 3. 每个点的步长 (仅用于显示)
-        step_length = distance / (num_points - 1)
-        
-        # 检查时间间隔是否合理
-        if time_step < 0.001:
-            # 时间间隔太小，可能影响控制精度
-            min_points = int(total_time / 0.001) + 1
+        # 限制点数范围
+        if num_points < 2:
+            num_points = 2
+        if num_points > 10000:
+            # 如果点数太多，提示用户降低频率或提高速度
             QMessageBox.warning(
                 self,
-                "时间间隔过小",
-                f"当前设置会产生 {time_step*1000:.2f} ms 的时间间隔，小于 1ms。\n"
-                f"建议将插补点数增加到至少 {min_points} 点。\n"
-                f"或者降低运动速度。"
+                "插补点数过多",
+                f"计算需要 {num_points} 个点，超过最大限制(10000)。\n"
+                f"建议:\n"
+                f"1. 降低发送频率 (当前{frequency}Hz)\n"
+                f"2. 提高运动速度 (当前{speed:.1f}mm/s)\n"
+                f"3. 缩短运动距离"
             )
-        elif time_step > 0.5:
-            # 时间间隔太大，运动可能不流畅
-            max_points = min(int(total_time / 0.005) + 1, 10000)  # 建议最大5ms间隔
-            QMessageBox.information(
-                self,
-                "时间间隔较大",
-                f"当前设置会产生 {time_step*1000:.2f} ms 的时间间隔。\n"
-                f"如需更流畅的运动，建议将插补点数增加到 {max_points} 点左右。"
-            )
+            num_points = 10000
         
-        # 更新时间间隔（阻断信号防止循环）
-        self.time_step_spin.blockSignals(True)
-        self.time_step_spin.setValue(time_step)
-        self.time_step_spin.blockSignals(False)
+        # 更新UI
+        self.num_points_spin.blockSignals(True)
+        self.num_points_spin.setValue(num_points)
+        self.num_points_spin.blockSignals(False)
+        
+        # 更新时间间隔显示
+        self.time_step_label.setText(f"{time_step*1000:.1f} ms")
+        
+        # 计算实际能达到的速度（可能因为取整有微小差异）
+        actual_total_time = (num_points - 1) * time_step
+        actual_speed = distance / actual_total_time
         
         # 显示信息
         speed_display = speed
+        actual_speed_display = actual_speed
         speed_unit = "mm/s"
         if self.speed_unit_combo.currentText() == "m/s":
             speed_display = speed / 1000.0
+            actual_speed_display = actual_speed / 1000.0
             speed_unit = "m/s"
+        
+        self.total_time_label.setText(f"{actual_total_time:.3f} s")
         
         QMessageBox.information(
             self,
             "计算完成",
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"轨迹长度: {distance:.2f} mm ({distance/1000:.3f} m)\n"
-            f"设置速度: {speed_display:.2f} {speed_unit}\n"
+            f"目标速度: {speed_display:.2f} {speed_unit}\n"
+            f"发送频率: {frequency} Hz (固定)\n"
+            f"时间间隔: {time_step*1000:.1f} ms\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"总运行时间: {total_time:.3f} s (固定)\n"
-            f"插补点数: {num_points}\n"
-            f"时间间隔: {time_step*1000:.2f} ms\n"
-            f"点间距: {step_length:.3f} mm\n"
+            f"计算结果:\n"
+            f"  插补点数: {num_points} 点\n"
+            f"  预计总时间: {actual_total_time:.3f} s\n"
+            f"  实际速度: {actual_speed_display:.2f} {speed_unit}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✓ 无论插补点数多少，平均速度始终为 {speed_display:.2f} {speed_unit}"
+            f"✓ 以 {frequency}Hz 频率发送 {num_points} 个点\n"
+            f"✓ 机器人将以约 {actual_speed_display:.2f} {speed_unit} 运动"
         )
+        
+        # 触发一次预览更新
+        self.preview_trajectory()
     
     def linear_interpolate(self, p1, p2, num_points):
         """
@@ -470,9 +492,14 @@ class TrajectoryGeneratorPanel(QWidget):
         
         # 更新统计
         distance = self.calculate_distance(p1, p2)
-        time_step = self.time_step_spin.value()
+        frequency = self.frequency_spin.value()
+        time_step = 1.0 / frequency
         total_time = (num_points - 1) * time_step
-        self.stats_label.setText(f"直线距离: {distance:.2f} mm | 点数: {num_points} | 预计时间: {total_time:.2f} s")
+        actual_speed = distance / total_time if total_time > 0 else 0
+        
+        self.stats_label.setText(f"距离: {distance:.2f}mm | 点数: {num_points} | "
+                                f"频率: {frequency}Hz | 时间: {total_time:.2f}s | "
+                                f"速度: {actual_speed:.1f}mm/s")
         
         # 在3D视图中显示
         if self.robot_view:
@@ -481,8 +508,8 @@ class TrajectoryGeneratorPanel(QWidget):
         
         self.save_btn.setEnabled(True)
         
-        # 发射信号
-        self.trajectory_generated.emit(self.generated_points)
+        # 发射信号（带上时间间隔）
+        self.trajectory_generated.emit(self.generated_points, time_step)
     
     def generate_trajectory(self):
         """生成轨迹（带确认）"""
@@ -541,9 +568,15 @@ class TrajectoryGeneratorPanel(QWidget):
                 columns=['x', 'y', 'z', 'rx', 'ry', 'rz']
             )
             
-            # 添加时间戳列
-            time_step = self.time_step_spin.value()
+            # 添加时间戳列（根据固定频率计算）
+            frequency = self.frequency_spin.value()
+            time_step = 1.0 / frequency
             df['时间戳(秒)'] = [i * time_step for i in range(len(df))]
+            
+            # 添加频率信息到注释
+            distance = self.calculate_distance(self.generated_points[0], self.generated_points[-1])
+            total_time = (len(self.generated_points) - 1) * time_step
+            actual_speed = distance / total_time
             
             # 确保目录存在
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -554,7 +587,12 @@ class TrajectoryGeneratorPanel(QWidget):
             QMessageBox.information(
                 self, 
                 "保存成功", 
-                f"轨迹已保存到:\n{file_path}\n\n共 {len(df)} 个点位"
+                f"轨迹已保存到:\n{file_path}\n\n"
+                f"共 {len(df)} 个点位\n"
+                f"发送频率: {frequency}Hz\n"
+                f"时间间隔: {time_step*1000:.1f}ms\n"
+                f"预计总时间: {total_time:.2f}s\n"
+                f"实际速度: {actual_speed:.1f}mm/s"
             )
             
         except Exception as e:

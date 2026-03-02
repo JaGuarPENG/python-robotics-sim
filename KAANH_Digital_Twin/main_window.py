@@ -398,10 +398,21 @@ class TeachPendantWindow(QMainWindow):
         self.robot_view.set_trajectory(display_points)
         self.statusBar.showMessage(f"轨迹加载成功，共 {len(points)} 个点位")
 
-    def on_manual_trajectory_ready(self, points):
-        """手动生成的轨迹就绪"""
+    def on_manual_trajectory_ready(self, points, time_step=None):
+        """手动生成的轨迹就绪
+        
+        Args:
+            points: 轨迹点列表
+            time_step: 每个点之间的时间间隔（秒），用于控制执行速度
+        """
         self.current_vision_trajectory = points
-        self.statusBar.showMessage(f"手动轨迹生成完成，共 {len(points)} 个点位，可以执行或保存")
+        self.trajectory_time_step = time_step  # 保存时间间隔
+        
+        if time_step:
+            frequency = 1.0 / time_step
+            self.statusBar.showMessage(f"轨迹生成完成: {len(points)}个点, 时间间隔{time_step*1000:.1f}ms, 频率{frequency:.1f}Hz")
+        else:
+            self.statusBar.showMessage(f"手动轨迹生成完成，共 {len(points)} 个点位，可以执行或保存")
 
     def on_execute_vision_trajectory(self):
         if not self.current_vision_trajectory:
@@ -476,18 +487,31 @@ class TeachPendantWindow(QMainWindow):
             # 3. 开始 UDP 增量执行
             self.signals.status_updated.emit("步骤 3/3: 开始执行增量轨迹")
             self.is_recording_actual = True
-            self._run_points_sequence_udp(points)
+            # 使用轨迹自带的时间间隔（如果有的话）
+            time_step = getattr(self, 'trajectory_time_step', None)
+            self._run_points_sequence_udp(points, time_step)
             
         except Exception as e:
             self.signals.error_occurred.emit(f"流水线执行异常: {e}")
 
-    def _run_points_sequence_udp(self, points):
-        """UDP 增量模式执行逻辑"""
-        print(f"\nUDP 轨迹执行性能报告 (Hz: {self.playback_frequency})")
+    def _run_points_sequence_udp(self, points, time_step=None):
+        """UDP 增量模式执行逻辑
+        
+        Args:
+            points: 轨迹点列表
+            time_step: 每个点之间的时间间隔（秒），如果为None则使用默认频率
+        """
+        # 确定时间间隔
+        if time_step is not None:
+            target_interval = time_step
+            frequency = 1.0 / time_step
+            print(f"\nUDP 轨迹执行 (使用轨迹自带频率: {frequency:.1f}Hz, 间隔: {time_step*1000:.2f}ms)")
+        else:
+            target_interval = 1.0 / self.playback_frequency
+            print(f"\nUDP 轨迹执行性能报告 (Hz: {self.playback_frequency})")
+        
         print(f"{'点位':<8} | {'偏移 X(mm)':<12} | {'偏移 Y(mm)':<12} | {'总周期(ms)':<12}")
         print("-" * 60)
-        
-        target_interval = 1.0 / self.playback_frequency
         try:
             # 记录轨迹起始点作为基准 (Origin)
             # 注意：UDP 跟随模式下，下发的值是相对于机器人进入 follower_cart 瞬间位置的偏移
