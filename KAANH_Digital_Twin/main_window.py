@@ -25,6 +25,7 @@ from .ui.teleop_panel import TeleopPanel
 from .ui.follower_panel import FollowerPanel
 from .ui.vision_panel import VisionPanel
 from .ui.log_panel import LogPanel
+from .ui.trajectory_generator_panel import TrajectoryGeneratorPanel
 from .logic.conveyor_tracking_service import ConveyorTrackingService
 
 # 导入逻辑服务
@@ -297,6 +298,15 @@ class TeachPendantWindow(QMainWindow):
         vision_layout.addStretch()
         self.tabs.addTab(vision_tab, "视觉引导")
 
+        # Tab 4: 轨迹生成器
+        traj_gen_tab = QWidget()
+        traj_gen_layout = QVBoxLayout(traj_gen_tab)
+        self.trajectory_gen_panel = TrajectoryGeneratorPanel(self.robot_view, self.controller)
+        self.trajectory_gen_panel.trajectory_generated.connect(self.on_manual_trajectory_ready)
+        traj_gen_layout.addWidget(self.trajectory_gen_panel)
+        traj_gen_layout.addStretch()
+        self.tabs.addTab(traj_gen_tab, "轨迹生成")
+
         main_layout.addWidget(self.tabs, stretch=2)
 
         # 状态栏
@@ -387,6 +397,11 @@ class TeachPendantWindow(QMainWindow):
         display_points = [(p[0], p[1], p[2]) for p in points]
         self.robot_view.set_trajectory(display_points)
         self.statusBar.showMessage(f"轨迹加载成功，共 {len(points)} 个点位")
+
+    def on_manual_trajectory_ready(self, points):
+        """手动生成的轨迹就绪"""
+        self.current_vision_trajectory = points
+        self.statusBar.showMessage(f"手动轨迹生成完成，共 {len(points)} 个点位，可以执行或保存")
 
     def on_execute_vision_trajectory(self):
         if not self.current_vision_trajectory:
