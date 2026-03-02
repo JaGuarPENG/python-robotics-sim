@@ -146,11 +146,16 @@ class ConveyorTrackingService(QObject):
                 # 状态机核心控制流
                 # ==========================
                 if self.state == "HOVERING":
-                    self.current_z_target = target_pos[2] + self.hover_height
+                    # 【优化】漏斗式下压：根据 XY 误差动态调整高度，防止目标跑得快时视野过小而丢失
+                    # 当 XY 误差较大时，保持较高的高度 (最大可额外抬高 15cm)，随着对准逐渐下降
+                    dynamic_hover_height = max(self.hover_height, min(0.15, real_xy_distance * 1.5))
+                    self.current_z_target = target_pos[2] + dynamic_hover_height
+                    
                     actual_tip_z_cur = tcp_m[2] - self.tool_length
                     
-                    # 判定条件：水平对准且高度已降到悬停位附近
-                    if real_xy_distance < self.xy_threshold and abs(actual_tip_z_cur - self.current_z_target) < 0.070:
+                    # 判定条件：水平对准且高度已降到真实的悬停位附近
+                    target_final_hover_z = target_pos[2] + self.hover_height
+                    if real_xy_distance < self.xy_threshold and abs(actual_tip_z_cur - target_final_hover_z) < 0.070:
                         self.hover_count += 1
                     else:
                         self.hover_count = 0
