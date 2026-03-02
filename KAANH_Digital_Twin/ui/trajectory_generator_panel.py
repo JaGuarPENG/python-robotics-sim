@@ -310,17 +310,42 @@ class TrajectoryGeneratorPanel(QWidget):
             self.speed_spin.setSuffix(" m/s")
     
     def on_param_changed(self):
-        """插补点数改变时，可以根据当前速度重新计算时间间隔"""
-        pass
+        """插补点数改变时，保持速度不变，自动重新计算时间间隔"""
+        # 获取当前速度
+        speed = self.get_speed_mm_s()
+        if speed < 0.01:
+            return
+        
+        p1 = self.get_start_point()
+        p2 = self.get_end_point()
+        distance = self.calculate_distance(p1, p2)
+        
+        if distance < 0.01:
+            return
+        
+        num_points = self.num_points_spin.value()
+        
+        # 保持速度不变，重新计算时间间隔
+        total_time = distance / speed
+        time_step = total_time / (num_points - 1)
+        
+        # 更新时间间隔（阻断信号防止循环）
+        self.time_step_spin.blockSignals(True)
+        self.time_step_spin.setValue(time_step)
+        self.time_step_spin.blockSignals(False)
     
     def on_time_step_changed(self):
-        """时间间隔改变时，可以反算速度"""
+        """时间间隔改变时，可以反算当前速度（仅显示用）"""
+        # 可以选择在这里显示当前速度
         pass
     
     def calculate_from_speed(self):
         """
         根据设置的速度自动计算时间间隔
-        公式: 时间间隔 = (轨迹长度 / 插补点数) / 速度
+        核心公式: 总时间 = 轨迹长度 / 速度
+                 时间间隔 = 总时间 / (插补点数 - 1)
+        
+        这样无论插补点数多少，机器人末端的平均运动速度都是固定的
         """
         p1 = self.get_start_point()
         p2 = self.get_end_point()
@@ -342,55 +367,44 @@ class TrajectoryGeneratorPanel(QWidget):
         # 获取插补点数
         num_points = self.num_points_spin.value()
         
-        # 计算每个点之间的步长 (mm)
+        # ============================================
+        # 核心计算逻辑
+        # ============================================
+        # 1. 计算总时间 (固定，由距离和速度决定)
+        total_time = distance / speed  # 秒
+        
+        # 2. 计算时间间隔 (由总时间和插补点数决定)
+        # 如果有N个点，则有N-1个间隔
+        time_step = total_time / (num_points - 1)
+        
+        # 3. 每个点的步长 (仅用于显示)
         step_length = distance / (num_points - 1)
         
-        # 计算时间间隔 (s)
-        # 走过 step_length 距离需要的时间 = step_length / speed
-        time_step = step_length / speed
-        
-        # 限制时间间隔范围
+        # 检查时间间隔是否合理
         if time_step < 0.001:
-            # 如果时间间隔太小，建议增加插补点数
-            suggested_points = int(distance / (speed * 0.001)) + 1
-            reply = QMessageBox.question(
+            # 时间间隔太小，可能影响控制精度
+            min_points = int(total_time / 0.001) + 1
+            QMessageBox.warning(
                 self,
                 "时间间隔过小",
-                f"根据当前速度和点数，计算出的时间间隔为 {time_step*1000:.2f} ms，小于 1ms。\n"
-                f"建议将插补点数增加到约 {suggested_points} 点。\n"
-                f"是否自动调整？",
-                QMessageBox.Yes | QMessageBox.No
+                f"当前设置会产生 {time_step*1000:.2f} ms 的时间间隔，小于 1ms。\n"
+                f"建议将插补点数增加到至少 {min_points} 点。\n"
+                f"或者降低运动速度。"
             )
-            if reply == QMessageBox.Yes:
-                self.num_points_spin.setValue(min(suggested_points, 10000))
-                # 重新计算
-                step_length = distance / (self.num_points_spin.value() - 1)
-                time_step = step_length / speed
-            else:
-                time_step = 0.001
-        elif time_step > 1.0:
-            # 如果时间间隔太大，建议减少插补点数
-            suggested_points = max(int(distance / speed) + 1, 2)
-            reply = QMessageBox.question(
+        elif time_step > 0.5:
+            # 时间间隔太大，运动可能不流畅
+            max_points = min(int(total_time / 0.005) + 1, 10000)  # 建议最大5ms间隔
+            QMessageBox.information(
                 self,
-                "时间间隔过大",
-                f"根据当前速度和点数，计算出的时间间隔为 {time_step:.2f} s，大于 1s。\n"
-                f"建议将插补点数减少到约 {suggested_points} 点。\n"
-                f"是否自动调整？",
-                QMessageBox.Yes | QMessageBox.No
+                "时间间隔较大",
+                f"当前设置会产生 {time_step*1000:.2f} ms 的时间间隔。\n"
+                f"如需更流畅的运动，建议将插补点数增加到 {max_points} 点左右。"
             )
-            if reply == QMessageBox.Yes:
-                self.num_points_spin.setValue(suggested_points)
-                step_length = distance / (suggested_points - 1)
-                time_step = step_length / speed
         
         # 更新时间间隔（阻断信号防止循环）
         self.time_step_spin.blockSignals(True)
         self.time_step_spin.setValue(time_step)
         self.time_step_spin.blockSignals(False)
-        
-        # 计算总时间
-        total_time = (num_points - 1) * time_step
         
         # 显示信息
         speed_display = speed
@@ -402,12 +416,16 @@ class TrajectoryGeneratorPanel(QWidget):
         QMessageBox.information(
             self,
             "计算完成",
-            f"轨迹长度: {distance:.2f} mm\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"轨迹长度: {distance:.2f} mm ({distance/1000:.3f} m)\n"
             f"设置速度: {speed_display:.2f} {speed_unit}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"总运行时间: {total_time:.3f} s (固定)\n"
             f"插补点数: {num_points}\n"
+            f"时间间隔: {time_step*1000:.2f} ms\n"
             f"点间距: {step_length:.3f} mm\n"
-            f"时间间隔: {time_step*1000:.2f} ms ({time_step:.4f} s)\n"
-            f"预计总时间: {total_time:.2f} s"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✓ 无论插补点数多少，平均速度始终为 {speed_display:.2f} {speed_unit}"
         )
     
     def linear_interpolate(self, p1, p2, num_points):
