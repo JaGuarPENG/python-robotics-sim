@@ -21,6 +21,7 @@ class VisionPanel(QWidget):
     # 新增传送带追踪相关信号
     conveyor_tracking_toggled = pyqtSignal(bool)
     conveyor_speed_changed = pyqtSignal(float)
+    conveyor_hover_only_toggled = pyqtSignal(bool)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -103,7 +104,26 @@ class VisionPanel(QWidget):
         speed_layout.addWidget(self.speed_val_label)
         tracking_layout.addLayout(speed_layout)
 
+        # 新增：仅悬停模式按钮
+        self.hover_only_btn = QPushButton("开启仅悬停追踪 (不触碰)")
+        self.hover_only_btn.setCheckable(True)
+        self.hover_only_btn.setMinimumHeight(50)
+        self.hover_only_btn.setStyleSheet("""
+            QPushButton { background-color: #8e44ad; color: white; font-weight: bold; }
+            QPushButton:checked { background-color: #9b59b6; }
+        """)
+        self.hover_only_btn.toggled.connect(self.on_hover_only_toggled)
+        tracking_layout.addWidget(self.hover_only_btn)
+
         layout.addWidget(tracking_group)
+
+    def on_hover_only_toggled(self, checked):
+        """处理仅悬停按钮点击"""
+        if checked:
+            self.hover_only_btn.setText("停止仅悬停追踪")
+        else:
+            self.hover_only_btn.setText("开启仅悬停追踪 (不触碰)")
+        self.conveyor_hover_only_toggled.emit(checked)
 
     def on_tracking_toggled(self, checked):
         """处理追踪按钮点击"""

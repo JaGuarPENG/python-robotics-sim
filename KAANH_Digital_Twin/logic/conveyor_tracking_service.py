@@ -156,13 +156,17 @@ class ConveyorTrackingService(QObject):
                         self.hover_count = 0
                     
                     if self.hover_count >= 5:
-                        print(f"--- [状态机] 目标已稳定截获 (计数={self.hover_count})，进入 APPROACHING ---")
-                        self.state = "APPROACHING"
-                        self.hover_count = 0
-                        if self.use_blind_tracking:
-                            self.locked_x = target_pos[0]
-                            self.locked_y = predicted_target_y
-                            print(f"--- [盲抓模式] 已锁定坐标 X:{self.locked_x:.3f}, Y:{self.locked_y:.3f} ---")
+                        if getattr(self, 'hover_only_mode', False):
+                            if self.hover_count % 60 == 0: # 避免刷屏，每秒打印一次
+                                print(f"--- [状态机] 仅悬停模式：维持 HOVERING，不进入 APPROACHING (计数={self.hover_count}) ---")
+                        else:
+                            print(f"--- [状态机] 目标已稳定截获 (计数={self.hover_count})，进入 APPROACHING ---")
+                            self.state = "APPROACHING"
+                            self.hover_count = 0
+                            if self.use_blind_tracking:
+                                self.locked_x = target_pos[0]
+                                self.locked_y = predicted_target_y
+                                print(f"--- [盲抓模式] 已锁定坐标 X:{self.locked_x:.3f}, Y:{self.locked_y:.3f} ---")
 
                 elif self.state == "APPROACHING":
                     self.locked_y += self.conveyor_speed_y * self.vision_interval

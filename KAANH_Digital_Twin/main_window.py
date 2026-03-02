@@ -130,6 +130,25 @@ class TeachPendantWindow(QMainWindow):
                 self.vision_panel.tracking_btn.blockSignals(False)
                 return
 
+            self.tracking_service.hover_only_mode = False
+            self.tracking_service.start_tracking()
+        else:
+            self.tracking_service.stop_tracking()
+
+    def _on_conveyor_hover_only_toggled(self, checked):
+        """处理来自 VisionPanel 的仅悬停追踪开关请求"""
+        if checked:
+            # 只有在机器人使能的情况下才允许真正追踪
+            if not self.controller.state.is_enabled:
+                QMessageBox.warning(self, "警告", "机器人未使能，请先连接并使能机器人！")
+                # 强制将按钮状态改回去 (不触发信号递归)
+                self.vision_panel.hover_only_btn.blockSignals(True)
+                self.vision_panel.hover_only_btn.setChecked(False)
+                self.vision_panel.on_hover_only_toggled(False)
+                self.vision_panel.hover_only_btn.blockSignals(False)
+                return
+
+            self.tracking_service.hover_only_mode = True
             self.tracking_service.start_tracking()
         else:
             self.tracking_service.stop_tracking()
@@ -226,6 +245,7 @@ class TeachPendantWindow(QMainWindow):
         self.vision_panel.udp_execution_requested.connect(self.on_execute_vision_trajectory_udp)
         self.vision_panel.actual_export_requested.connect(self.on_save_actual_trajectory)
         self.vision_panel.conveyor_tracking_toggled.connect(self._on_conveyor_tracking_toggled)
+        self.vision_panel.conveyor_hover_only_toggled.connect(self._on_conveyor_hover_only_toggled)
         self.vision_panel.conveyor_speed_changed.connect(self._on_conveyor_speed_changed)
         vision_layout.addWidget(self.vision_panel)
         vision_layout.addStretch()
