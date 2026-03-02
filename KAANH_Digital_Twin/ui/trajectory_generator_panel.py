@@ -133,28 +133,58 @@ class TrajectoryGeneratorPanel(QWidget):
         # 点数
         interp_layout.addWidget(QLabel("插补点数:"))
         self.num_points_spin = QSpinBox()
-        self.num_points_spin.setRange(2, 1000)
+        self.num_points_spin.setRange(2, 10000)
         self.num_points_spin.setValue(50)
         self.num_points_spin.setMinimumWidth(80)
+        self.num_points_spin.valueChanged.connect(self.on_param_changed)
         interp_layout.addWidget(self.num_points_spin)
         
         # 时间间隔
         interp_layout.addWidget(QLabel("时间间隔(s):"))
         self.time_step_spin = QDoubleSpinBox()
-        self.time_step_spin.setRange(0.001, 1.0)
-        self.time_step_spin.setDecimals(3)
+        self.time_step_spin.setRange(0.001, 10.0)
+        self.time_step_spin.setDecimals(4)
         self.time_step_spin.setValue(0.01)
         self.time_step_spin.setMinimumWidth(80)
+        self.time_step_spin.valueChanged.connect(self.on_time_step_changed)
         interp_layout.addWidget(self.time_step_spin)
         
-        # 姿态固定提示
-        orientation_info = QLabel("⚠ 姿态固定: Rx=180°, Ry=0°, Rz=0°")
-        orientation_info.setStyleSheet("color: #e74c3c; font-weight: bold;")
-        interp_layout.addWidget(orientation_info)
+        # 速度设置
+        interp_layout.addWidget(QLabel("速度(mm/s):"))
+        self.speed_spin = QDoubleSpinBox()
+        self.speed_spin.setRange(0.1, 1000.0)
+        self.speed_spin.setDecimals(1)
+        self.speed_spin.setValue(50.0)  # 默认50mm/s
+        self.speed_spin.setSuffix(" mm/s")
+        self.speed_spin.setMinimumWidth(120)
+        self.speed_spin.valueChanged.connect(self.on_speed_changed)
+        interp_layout.addWidget(self.speed_spin)
+        
+        # 速度单位切换
+        self.speed_unit_combo = QComboBox()
+        self.speed_unit_combo.addItems(["mm/s", "m/s"])
+        self.speed_unit_combo.setMinimumWidth(80)
+        self.speed_unit_combo.currentIndexChanged.connect(self.on_speed_unit_changed)
+        interp_layout.addWidget(self.speed_unit_combo)
+        
+        # 自动计算按钮
+        self.calc_btn = QPushButton("🔄 根据速度计算")
+        self.calc_btn.setToolTip("根据设置的速度、轨迹长度自动计算时间间隔")
+        self.calc_btn.clicked.connect(self.calculate_from_speed)
+        self.calc_btn.setStyleSheet("background-color: #9b59b6; color: white;")
+        interp_layout.addWidget(self.calc_btn)
         
         interp_layout.addStretch()
         interp_group.setLayout(interp_layout)
         layout.addWidget(interp_group)
+        
+        # 姿态固定提示（移到下一行）
+        orientation_layout = QHBoxLayout()
+        orientation_info = QLabel("⚠ 姿态固定: Rx=180°, Ry=0°, Rz=0°")
+        orientation_info.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        orientation_layout.addWidget(orientation_info)
+        orientation_layout.addStretch()
+        layout.addLayout(orientation_layout)
         
         # ==================== 操作按钮 ====================
         action_group = QGroupBox("操作")
@@ -243,6 +273,142 @@ class TrajectoryGeneratorPanel(QWidget):
         """获取终点坐标（位置+固定姿态180,0,0）"""
         pos = [spin.value() for spin in self.end_inputs]
         return pos + [180.0, 0.0, 0.0]  # 固定姿态
+    
+    def get_speed_mm_s(self):
+        """获取速度，统一转换为 mm/s"""
+        speed = self.speed_spin.value()
+        if self.speed_unit_combo.currentText() == "m/s":
+            speed = speed * 1000.0  # m/s -> mm/s
+        return speed
+    
+    def set_speed_mm_s(self, speed_mm_s):
+        """设置速度（内部统一用mm/s）"""
+        if self.speed_unit_combo.currentText() == "m/s":
+            self.speed_spin.setValue(speed_mm_s / 1000.0)
+        else:
+            self.speed_spin.setValue(speed_mm_s)
+    
+    def on_speed_changed(self):
+        """速度改变时，可以选择自动更新时间间隔"""
+        pass  # 不自动计算，需要点击按钮才计算
+    
+    def on_speed_unit_changed(self, index):
+        """速度单位改变时，转换数值"""
+        if index == 0:  # 切换到 mm/s
+            # 当前是 m/s，转换为 mm/s
+            current = self.speed_spin.value()
+            self.speed_spin.setRange(0.1, 1000.0)
+            self.speed_spin.setDecimals(1)
+            self.speed_spin.setValue(current * 1000.0)
+            self.speed_spin.setSuffix(" mm/s")
+        else:  # 切换到 m/s
+            # 当前是 mm/s，转换为 m/s
+            current = self.speed_spin.value()
+            self.speed_spin.setRange(0.0001, 1.0)
+            self.speed_spin.setDecimals(4)
+            self.speed_spin.setValue(current / 1000.0)
+            self.speed_spin.setSuffix(" m/s")
+    
+    def on_param_changed(self):
+        """插补点数改变时，可以根据当前速度重新计算时间间隔"""
+        pass
+    
+    def on_time_step_changed(self):
+        """时间间隔改变时，可以反算速度"""
+        pass
+    
+    def calculate_from_speed(self):
+        """
+        根据设置的速度自动计算时间间隔
+        公式: 时间间隔 = (轨迹长度 / 插补点数) / 速度
+        """
+        p1 = self.get_start_point()
+        p2 = self.get_end_point()
+        
+        # 计算轨迹长度
+        distance = self.calculate_distance(p1, p2)  # mm
+        
+        if distance < 0.01:  # 距离太小
+            QMessageBox.warning(self, "警告", "起点和终点距离太小，无法计算")
+            return
+        
+        # 获取速度 (mm/s)
+        speed = self.get_speed_mm_s()
+        
+        if speed < 0.01:
+            QMessageBox.warning(self, "警告", "速度设置太小")
+            return
+        
+        # 获取插补点数
+        num_points = self.num_points_spin.value()
+        
+        # 计算每个点之间的步长 (mm)
+        step_length = distance / (num_points - 1)
+        
+        # 计算时间间隔 (s)
+        # 走过 step_length 距离需要的时间 = step_length / speed
+        time_step = step_length / speed
+        
+        # 限制时间间隔范围
+        if time_step < 0.001:
+            # 如果时间间隔太小，建议增加插补点数
+            suggested_points = int(distance / (speed * 0.001)) + 1
+            reply = QMessageBox.question(
+                self,
+                "时间间隔过小",
+                f"根据当前速度和点数，计算出的时间间隔为 {time_step*1000:.2f} ms，小于 1ms。\n"
+                f"建议将插补点数增加到约 {suggested_points} 点。\n"
+                f"是否自动调整？",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self.num_points_spin.setValue(min(suggested_points, 10000))
+                # 重新计算
+                step_length = distance / (self.num_points_spin.value() - 1)
+                time_step = step_length / speed
+            else:
+                time_step = 0.001
+        elif time_step > 1.0:
+            # 如果时间间隔太大，建议减少插补点数
+            suggested_points = max(int(distance / speed) + 1, 2)
+            reply = QMessageBox.question(
+                self,
+                "时间间隔过大",
+                f"根据当前速度和点数，计算出的时间间隔为 {time_step:.2f} s，大于 1s。\n"
+                f"建议将插补点数减少到约 {suggested_points} 点。\n"
+                f"是否自动调整？",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                self.num_points_spin.setValue(suggested_points)
+                step_length = distance / (suggested_points - 1)
+                time_step = step_length / speed
+        
+        # 更新时间间隔（阻断信号防止循环）
+        self.time_step_spin.blockSignals(True)
+        self.time_step_spin.setValue(time_step)
+        self.time_step_spin.blockSignals(False)
+        
+        # 计算总时间
+        total_time = (num_points - 1) * time_step
+        
+        # 显示信息
+        speed_display = speed
+        speed_unit = "mm/s"
+        if self.speed_unit_combo.currentText() == "m/s":
+            speed_display = speed / 1000.0
+            speed_unit = "m/s"
+        
+        QMessageBox.information(
+            self,
+            "计算完成",
+            f"轨迹长度: {distance:.2f} mm\n"
+            f"设置速度: {speed_display:.2f} {speed_unit}\n"
+            f"插补点数: {num_points}\n"
+            f"点间距: {step_length:.3f} mm\n"
+            f"时间间隔: {time_step*1000:.2f} ms ({time_step:.4f} s)\n"
+            f"预计总时间: {total_time:.2f} s"
+        )
     
     def linear_interpolate(self, p1, p2, num_points):
         """
