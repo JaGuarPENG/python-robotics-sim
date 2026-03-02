@@ -572,28 +572,12 @@ class TrajectoryGeneratorPanel(QWidget):
             else:  # 无偏置
                 x, y, z = x_target, y_target, z_target
             
-            # 姿态处理
-            if self.fix_orientation_btn.isChecked():
-                # 固定姿态为 180, 0, 0
-                rx, ry, rz = 180.0, 0.0, 0.0
-            else:
-                # 姿态插值（使用起点/终点的姿态）
-                rx = self._interp_angle(p1[3], p2[3], t)
-                ry = self._interp_angle(p1[4], p2[4], t)
-                rz = self._interp_angle(p1[5], p2[5], t)
+            # 姿态固定为 180, 0, 0
+            rx, ry, rz = 180.0, 0.0, 0.0
             
             points.append([x, y, z, rx, ry, rz])
         
         return points
-    
-    def _interp_angle(self, a1, a2, t):
-        """角度插值（处理-180到180环绕）"""
-        diff = a2 - a1
-        while diff > 180:
-            diff -= 360
-        while diff < -180:
-            diff += 360
-        return a1 + diff * t
     
     def calculate_distance(self, p1, p2):
         """计算两点之间的距离"""
