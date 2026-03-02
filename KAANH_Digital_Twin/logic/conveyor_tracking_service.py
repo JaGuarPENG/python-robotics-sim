@@ -9,6 +9,8 @@ import math
 import numpy as np
 from PyQt5.QtCore import QObject, pyqtSignal
 
+from .tracking_algorithms import PIDTrackingAlgorithm, SimTrackingAlgorithm, OffsetTrackingAlgorithm
+
 class ConveyorTrackingService(QObject):
     status_updated = pyqtSignal(str)
     
@@ -61,18 +63,41 @@ class ConveyorTrackingService(QObject):
         
         self.approach_speed_z = 0.05    # Z轴逼近/复位速度: 0.05m/s (50mm/s)
         self.conveyor_speed_y = 0.05    # [优化] 传送带默认速度: 0.05m/s
-        self.xy_threshold = 0.001       # [优化] 水平误差阈值放宽至 5mm，防止速度过快时无法稳定触发
-        self.blind_xy_threshold = 0.001 # [新增] 盲抓触发的极小误差阈值 (如5mm以内直接触发)
+        self.xy_threshold = 0.001       # 严格要求1mm以内触发
+        self.blind_xy_threshold = 0.001 # 严格要求1mm以内触发
         
         # === 动态前馈参数 (适配125Hz控制频率) ===
         # 125Hz下预瞄6帧约48ms，与60Hz下3帧约50ms等效
         self.look_ahead_frames = 6.0    # 125Hz 控制周期下的预瞄帧数
 
-        # === PI 控制器参数 (Y轴跟踪) ===
-        self.pi_kp = 0.8  # 比例系数: 误差多大，补偿多少
-        self.pi_ki = 0.1  # 积分系数: 消除稳态误差
+        # === PID 控制器参数 (Y轴跟踪) ===
+        self.pi_kp = 0.2  # 比例系数: 提高响应速度，快速逼近
+        self.pi_ki = 0.05 # 积分系数: 消除1mm以内的微小稳态误差
+        self.pi_kd = 0.03 # 微分系数: 增加阻尼，防止超调震荡，帮助快速稳定在1mm内
         self.pi_integral_y = 0.0 # Y轴误差积分累计
-        self.pi_compensation_y = 0.0 # 最终PI计算出的Y轴补偿量
+        self.pi_last_error_y = 0.0 # 上一帧的误差
+        self.pi_compensation_y = 0.0 # 最终PID计算出的Y轴补偿量
+
+        # === 仿真算法 (速度前馈+限幅) 专用参数 ===
+        self.use_sim_algorithm = False
+        self.sim_kp = np.array([2.0, 2.0, 2.0])  # XYZ三轴P参数
+        self.sim_ki = np.array([0.5, 0.5, 0.5])
+        self.sim_max_step = 0.02 # 单控制周期(约0.016s)最大移动距离 20mm
+        self.sim_integral_limit = 0.1
+        self.sim_integral_error = np.zeros(3)
+        self.sim_virtual_pos = None # 虚拟当前位置 (用于平滑积分)
+
+        # === 隐性 Offset 追踪算法专用参数 ===
+        self.use_dynamic_offset = False
+        self.system_latency_offset = 0.12 # 系统的初始隐性延迟系数 (约20ms)
+
+        # === 追踪算法策略类 ===
+        self.algorithms = {
+            "PID": PIDTrackingAlgorithm(self),
+            "SIM": SimTrackingAlgorithm(self),
+            "OFFSET": OffsetTrackingAlgorithm(self)
+        }
+        self.active_algorithm = self.algorithms["PID"]
 
         # === 初始位置 (快速定位1) ===
         self.home_joints = [0, -15, 105, 0, -90, 0] # 角度
@@ -89,6 +114,8 @@ class ConveyorTrackingService(QObject):
         self.is_running = True
         self.state = "OBSERVING"
         self.last_target_id = None
+        self.sim_integral_error = np.zeros(3)
+        self.sim_virtual_pos = None
         
         # 启动双线程
         self.vision_thread = threading.Thread(target=self._vision_loop, daemon=True)
@@ -123,148 +150,41 @@ class ConveyorTrackingService(QObject):
                 target_pos, target_id = self.robot_view.renderer.get_tracking_target()
                 
             if target_pos is not None and target_id is not None:
-                # 如果是新进来的目标，立刻重置为 HOVERING
-                if self.last_target_id != target_id:
-                    self.last_target_id = target_id
-                    self.state = "HOVERING"
-                    self.hover_count = 0  # 重置计数
-                    self.current_z_target = target_pos[2] + self.hover_height
-                    print(f"\n--- [状态机] 发现新目标 ID={target_id}，进入 HOVERING (悬停同步) ---")
-
-                # ==========================
-                # 前馈速度补偿与截击 (Feedforward & Intercept)
-                # ==========================
-                # 基础物理预判 (固定的前馈时间，大约为预瞄加通信时间)
-                base_feedforward_time = (self.control_interval * self.look_ahead_frames) + 0.05
-                base_predicted_y = target_pos[1] + (self.conveyor_speed_y * base_feedforward_time)
-                
                 # 获取真实 TCP 用于计算误差 (单位转换: mm -> m)
                 tcp_mm = self.controller.state.get_tcp()
                 tcp_m = [tcp_mm[0]/1000.0, tcp_mm[1]/1000.0, tcp_mm[2]/1000.0]
                 
-                # 计算当前末端相对于小球实际位置的水平误差 (用于判定是否截获)
-                error_x = tcp_m[0] - target_pos[0]
-                error_y = tcp_m[1] - target_pos[1]
-                real_xy_distance = math.sqrt(error_x**2 + error_y**2)
-
-                # ==========================
-                # PI 闭环补偿控制 (仅在 Y 轴方向)
-                # ==========================
-                # 目标：让机械臂在 Y 轴跟上小球，即 error_y -> 0
-                # 如果小球比机械臂更靠前(沿着Y轴正方向跑)，error_y 为负，我们需要把预测点再往前推一点。
-                # 所以我们期望机械臂的 Y > 现在的 TCP Y，即补偿量为负的 error_y 相关项。
-                
-                if self.state in ["HOVERING", "APPROACHING"]:
-                    # 计算 PI 补偿
-                    self.pi_integral_y += error_y * self.vision_interval
-                    
-                    # 限制积分饱和 (防积分风饱和)
-                    max_integral = 0.2  # 最大积分为20cm
-                    self.pi_integral_y = max(-max_integral, min(max_integral, self.pi_integral_y))
-                    
-                    # 计算控制输出: P * 误差 + I * 积分
-                    # 如果小球在前面 (target_y > tcp_y)，error_y 为负。我们需要增加 predicted_y，所以减去 error_y。
-                    self.pi_compensation_y = - (self.pi_kp * error_y + self.pi_ki * self.pi_integral_y)
+                # 选择激活的算法
+                if self.use_sim_algorithm:
+                    alg = self.algorithms["SIM"]
+                elif self.use_dynamic_offset:
+                    alg = self.algorithms["OFFSET"]
                 else:
-                    # 如果丢失或在复位，清空积分器
-                    self.pi_integral_y = 0.0
-                    self.pi_compensation_y = 0.0
+                    alg = self.algorithms["PID"]
                     
-                # 最终预测目标 = 基础前馈位置 + PI 动态补偿
-                predicted_target_y = base_predicted_y + self.pi_compensation_y
-
-                # ==========================
-                # 状态机核心控制流
-                # ==========================
-                if self.state == "HOVERING":
-                    # 【优化】漏斗式下压：根据 XY 误差动态调整高度，防止目标跑得快时视野过小而丢失
-                    # 当 XY 误差较大时，保持较高的高度 (最大可额外抬高 15cm)，随着对准逐渐下降
-                    dynamic_hover_height = max(self.hover_height, min(0.15, real_xy_distance * 1.5))
-                    self.current_z_target = target_pos[2] + dynamic_hover_height
+                if self.active_algorithm != alg:
+                    self.active_algorithm = alg
+                    self.active_algorithm.reset()
                     
-                    actual_tip_z_cur = tcp_m[2] - self.tool_length
-                    
-                    # 判定条件：水平对准且高度已降到真实的悬停位附近
-                    target_final_hover_z = target_pos[2] + self.hover_height
-                    if real_xy_distance < self.xy_threshold and abs(actual_tip_z_cur - target_final_hover_z) < 0.070:
-                        self.hover_count += 1
-                    else:
-                        self.hover_count = 0
-                    
-                    if self.hover_count >= 5:
-                        if getattr(self, 'hover_only_mode', False):
-                            if self.hover_count % 60 == 0: # 避免刷屏，每秒打印一次
-                                print(f"--- [状态机] 仅悬停模式：维持 HOVERING，不进入 APPROACHING (计数={self.hover_count}) ---")
-                        else:
-                            print(f"--- [状态机] 目标已稳定截获 (计数={self.hover_count})，进入 APPROACHING ---")
-                            self.state = "APPROACHING"
-                            self.hover_count = 0
-                            if self.use_blind_tracking:
-                                self.locked_x = target_pos[0]
-                                self.locked_y = predicted_target_y
-                                print(f"--- [盲抓模式] 已锁定坐标 X:{self.locked_x:.3f}, Y:{self.locked_y:.3f} ---")
-
-                elif self.state == "APPROACHING":
-                    self.locked_y += self.conveyor_speed_y * self.vision_interval
-                    
-                    approach_time_budget = 0.5 # 秒
-                    dynamic_approach_speed_z = self.hover_height / approach_time_budget
-                    
-                    self.current_z_target -= dynamic_approach_speed_z * self.vision_interval
-                    if self.current_z_target < self.target_z_surface - 0.010:
-                        self.current_z_target = self.target_z_surface - 0.010
-                    
-                    actual_tip_z = tcp_m[2] - self.tool_length
-                    
-                    if actual_tip_z <= 0.265:
-                        final_err_x = tcp_m[0] - target_pos[0]
-                        final_err_y = tcp_m[1] - target_pos[1]
-                        final_dist_mm = math.sqrt(final_err_x**2 + final_err_y**2) * 1000.0
-                        
-                        print(f"--- [状态机] 已触碰小球表面，最终物理误差: {final_dist_mm:.2f}mm (X:{final_err_x*1000:.1f}, Y:{final_err_y*1000:.1f}) ---")
-                        
-                        if abs(self.conveyor_speed_y) > 0.001:
-                            learning_rate = 0.3
-                            time_correction = final_err_y / self.conveyor_speed_y
-                            self.system_latency_offset -= time_correction * learning_rate
-                            self.system_latency_offset = max(0.0, min(0.3, self.system_latency_offset))
-                            print(f"--- [自适应校准] 自动修正延迟系数 -> 新 offset: {self.system_latency_offset:.4f}s ---")
-                            
-                        self.state = "RETURNING"
-                        self.robot_view.renderer.mark_target_reached()
-
-                elif self.state == "RETURNING":
-                    self.locked_y += self.conveyor_speed_y * self.vision_interval
-                    self.current_z_target += (self.approach_speed_z * 2) * self.vision_interval
-                    if self.current_z_target >= target_pos[2] + self.hover_height:
-                        self.current_z_target = target_pos[2] + self.hover_height
-                        print(f"--- [状态机] 复位完成，回到 OBSERVING 状态 ---")
-                        self.state = "OBSERVING"
-                        self.last_target_id = None
-                
-                if self.state in ["APPROACHING", "RETURNING"]:
-                    final_target_pos = [self.locked_x, self.locked_y, self.current_z_target + self.tool_length]
-                else:
-                    final_target_pos = [target_pos[0], predicted_target_y, self.current_z_target + self.tool_length]
+                # 执行策略
+                final_target_pos = self.active_algorithm.execute_vision_cycle(target_pos, target_id, tcp_m, loop_start_time)
                 
                 # 写入缓冲区供控制线程读取
-                with self._target_lock:
-                    self._target_buffer['pos'] = final_target_pos
-                    self._target_buffer['timestamp'] = time.perf_counter()
-                    self._target_buffer['valid'] = True
-                    self._target_buffer['state'] = self.state
-                    self._target_buffer['has_target'] = True
-                    self._target_buffer['conveyor_speed'] = self.conveyor_speed_y
-                    
-                if self.state in ["HOVERING", "APPROACHING"] and int(loop_start_time * 10) % 10 == 0: 
-                    actual_tip_z = tcp_m[2] - self.tool_length
-                    print(f"[{self.state}] 目标Z:{self.current_z_target:.3f}m | 实际尖端Z:{actual_tip_z:.3f}m | XY误差:{real_xy_distance*1000.0:.1f}mm")
+                if final_target_pos is not None:
+                    with self._target_lock:
+                        self._target_buffer['pos'] = final_target_pos
+                        self._target_buffer['timestamp'] = time.perf_counter()
+                        self._target_buffer['valid'] = True
+                        self._target_buffer['state'] = self.state
+                        self._target_buffer['has_target'] = True
+                        self._target_buffer['conveyor_speed'] = self.conveyor_speed_y
 
             else:
                 if self.state != "OBSERVING":
                     print(f"--- [状态机] 目标丢失，返回初始位置 ---")
                     self.state = "OBSERVING"
                     self.last_target_id = None
+                    self.active_algorithm.reset()
                 
                 with self._target_lock:
                     self._target_buffer['valid'] = False

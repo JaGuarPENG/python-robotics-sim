@@ -20,6 +20,8 @@ class VisionPanel(QWidget):
     
     # 新增传送带追踪相关信号
     conveyor_tracking_toggled = pyqtSignal(bool)
+    conveyor_sim_tracking_toggled = pyqtSignal(bool)
+    conveyor_offset_tracking_toggled = pyqtSignal(bool)
     conveyor_speed_changed = pyqtSignal(float)
     conveyor_hover_only_toggled = pyqtSignal(bool)
     
@@ -80,7 +82,7 @@ class VisionPanel(QWidget):
         tracking_group = QGroupBox("传送带动态追踪")
         tracking_layout = QVBoxLayout(tracking_group)
 
-        self.tracking_btn = QPushButton("开启传送带追踪")
+        self.tracking_btn = QPushButton("开启传送带追踪 (绝对位置PID)")
         self.tracking_btn.setCheckable(True)
         self.tracking_btn.setMinimumHeight(50)
         self.tracking_btn.setStyleSheet("""
@@ -89,6 +91,28 @@ class VisionPanel(QWidget):
         """)
         self.tracking_btn.toggled.connect(self.on_tracking_toggled)
         tracking_layout.addWidget(self.tracking_btn)
+
+        # 新增仿真算法追踪按钮
+        self.sim_tracking_btn = QPushButton("开启传送带追踪 (仿真速度PI控制)")
+        self.sim_tracking_btn.setCheckable(True)
+        self.sim_tracking_btn.setMinimumHeight(50)
+        self.sim_tracking_btn.setStyleSheet("""
+            QPushButton { background-color: #3498db; color: white; font-weight: bold; }
+            QPushButton:checked { background-color: #2980b9; }
+        """)
+        self.sim_tracking_btn.toggled.connect(self.on_sim_tracking_toggled)
+        tracking_layout.addWidget(self.sim_tracking_btn)
+
+        # 新增自适应隐性 Offset 追踪按钮
+        self.offset_tracking_btn = QPushButton("开启传送带追踪 (自适应隐性Offset)")
+        self.offset_tracking_btn.setCheckable(True)
+        self.offset_tracking_btn.setMinimumHeight(50)
+        self.offset_tracking_btn.setStyleSheet("""
+            QPushButton { background-color: #9b59b6; color: white; font-weight: bold; }
+            QPushButton:checked { background-color: #8e44ad; }
+        """)
+        self.offset_tracking_btn.toggled.connect(self.on_offset_tracking_toggled)
+        tracking_layout.addWidget(self.offset_tracking_btn)
 
         # 速度调节
         speed_layout = QHBoxLayout()
@@ -109,13 +133,39 @@ class VisionPanel(QWidget):
         self.hover_only_btn.setCheckable(True)
         self.hover_only_btn.setMinimumHeight(50)
         self.hover_only_btn.setStyleSheet("""
-            QPushButton { background-color: #8e44ad; color: white; font-weight: bold; }
-            QPushButton:checked { background-color: #9b59b6; }
+            QPushButton { background-color: #34495e; color: white; font-weight: bold; }
+            QPushButton:checked { background-color: #2c3e50; }
         """)
         self.hover_only_btn.toggled.connect(self.on_hover_only_toggled)
         tracking_layout.addWidget(self.hover_only_btn)
 
         layout.addWidget(tracking_group)
+
+    def on_offset_tracking_toggled(self, checked):
+        """处理自适应隐性 Offset 追踪按钮点击"""
+        if checked:
+            self.offset_tracking_btn.setText("停止传送带追踪 (自适应隐性Offset)")
+            # 互斥取消其他模式
+            if self.tracking_btn.isChecked():
+                self.tracking_btn.setChecked(False)
+            if self.sim_tracking_btn.isChecked():
+                self.sim_tracking_btn.setChecked(False)
+        else:
+            self.offset_tracking_btn.setText("开启传送带追踪 (自适应隐性Offset)")
+        self.conveyor_offset_tracking_toggled.emit(checked)
+
+    def on_sim_tracking_toggled(self, checked):
+        """处理仿真追踪按钮点击"""
+        if checked:
+            self.sim_tracking_btn.setText("停止传送带追踪 (仿真速度PI控制)")
+            # 互斥取消其他模式
+            if self.tracking_btn.isChecked():
+                self.tracking_btn.setChecked(False)
+            if hasattr(self, 'offset_tracking_btn') and self.offset_tracking_btn.isChecked():
+                self.offset_tracking_btn.setChecked(False)
+        else:
+            self.sim_tracking_btn.setText("开启传送带追踪 (仿真速度PI控制)")
+        self.conveyor_sim_tracking_toggled.emit(checked)
 
     def on_hover_only_toggled(self, checked):
         """处理仅悬停按钮点击"""
