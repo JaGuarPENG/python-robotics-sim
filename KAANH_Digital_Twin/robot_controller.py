@@ -212,6 +212,25 @@ class RobotController:
             return True
         return False
 
+    def init_udp_tracking_mode(self):
+        """初始化 UDP follower_cart 追踪模式，返回零点 P0（米，基座坐标系）"""
+        self.cmd_start_follower()
+        time.sleep(1.0)
+        self.cmd_set_jog_coordinate_tool()
+        time.sleep(0.5)
+        self.cmd_follower_cart()   # 内部会重置 follower_offset
+        time.sleep(1.0)
+        tcp_mm = self.state.get_tcp()
+        return [tcp_mm[0]/1000.0, tcp_mm[1]/1000.0, tcp_mm[2]/1000.0]
+
+    def send_udp_target(self, target_m, p0_m):
+        """发送 UDP 偏移目标（基座坐标系 -> 工具坐标系映射）"""
+        dx = target_m[0] - p0_m[0]
+        dy = target_m[1] - p0_m[1]
+        dz = target_m[2] - p0_m[2]
+        # 坐标映射：基座 → 工具坐标系（按用户指示，应该是 yxz 顺序）
+        self.udp_client.send_pose_euler(dy, dx, -dz, 0, 0, 0)
+
     def start_follower_mode(self, ip):
         if self.ws_client.init_follower_mode(login_first=False, skip_enable=self.state.is_enabled):
             self.state.is_follower_mode = True

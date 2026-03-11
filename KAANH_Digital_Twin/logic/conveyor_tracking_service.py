@@ -50,6 +50,10 @@ class ConveyorTrackingService(QObject):
         self.state = "OBSERVING"  # OBSERVING, HOVERING, APPROACHING, RETURNING
         self.hover_count = 0      # [新增] 悬停稳定计数器
         
+        # === UDP follower_cart 追踪模式 ===
+        self.use_udp_follower = False
+        self.p0 = None   # follower_cart 零点 (m, 基座坐标系)
+
         # === 追踪模式控制 ===
         self.use_blind_tracking = True # [新增] 是否使用盲抓(开环)下压模式
         self.locked_x = 0.0            # 盲抓锁定的X坐标
@@ -110,19 +114,25 @@ class ConveyorTrackingService(QObject):
     def start_tracking(self):
         if self.is_running:
             return
-        
+
+        if self.use_udp_follower:
+            if not self.controller.udp_connected:
+                self.controller.connect_udp(9998)
+            self.p0 = self.controller.init_udp_tracking_mode()
+            print(f"[UDP追踪] 零点P0 = {[f'{v:.4f}' for v in self.p0]}")
+
         self.is_running = True
         self.state = "OBSERVING"
         self.last_target_id = None
         self.sim_integral_error = np.zeros(3)
         self.sim_virtual_pos = None
-        
+
         # 启动双线程
         self.vision_thread = threading.Thread(target=self._vision_loop, daemon=True)
         self.control_thread = threading.Thread(target=self._control_loop, daemon=True)
         self.vision_thread.start()
         self.control_thread.start()
-        
+
         self.status_updated.emit("传送带追踪服务已启动 (60Hz视觉+125Hz控制)")
         print("\n[阶段四] 传送带追踪服务已启动")
         print(f"  - 视觉线程: {self.vision_hz}Hz (目标检测+状态机)")
@@ -131,12 +141,17 @@ class ConveyorTrackingService(QObject):
     def stop_tracking(self):
         if not self.is_running:
             return
-            
+
         self.is_running = False
         if self.vision_thread:
             self.vision_thread.join(timeout=1.0)
         if self.control_thread:
             self.control_thread.join(timeout=1.0)
+
+        if self.use_udp_follower:
+            self.controller.cmd_stop_follower()
+            self.p0 = None
+
         self.status_updated.emit("传送带追踪服务已停止")
         print("[阶段四] 传送带追踪服务已停止")
 
@@ -181,7 +196,10 @@ class ConveyorTrackingService(QObject):
 
             else:
                 if self.state != "OBSERVING":
-                    print(f"--- [状态机] 目标丢失，返回初始位置 ---")
+                    if self.use_udp_follower:
+                        print(f"--- [UDP纯追踪] 目标丢失，原地悬停等待 ---")
+                    else:
+                        print(f"--- [状态机] 目标丢失，返回初始位置 ---")
                     self.state = "OBSERVING"
                     self.last_target_id = None
                     self.active_algorithm.reset()
@@ -208,37 +226,43 @@ class ConveyorTrackingService(QObject):
             valid = target_data.get('valid', False)
             target_pos = target_data.get('pos')
             
-            if has_target and valid and target_pos is not None and state != "OBSERVING":
-                current_joints_deg = self.controller.state.get_joints()
-                current_j1 = current_joints_deg[0]
-                
-                # 线性插值，使125Hz下运行平滑
-                time_since_vision = loop_start_time - target_data['timestamp']
-                interpolated_pos = list(target_pos)
-                if time_since_vision < 0.05:  # 只在延迟合理的情况下插值
-                    interpolated_pos[1] += target_data['conveyor_speed'] * time_since_vision
-
-                hover_rpy_deg = [180.0, 0.0, -90.0 + current_j1] 
-                
-                # === [测时开始] ===
-                t_ik_send_start = time.perf_counter()
-                
-                target_q_rad, ik_time = self.fast_ik.solve_ik(
-                    pos=interpolated_pos,
-                    rpy_deg=hover_rpy_deg,
-                    current_joints=np.deg2rad(current_joints_deg)
-                )
-                
-                if target_q_rad is not None:
-                    target_joints_deg = np.rad2deg(target_q_rad).tolist()
-                    self.controller.move_joint(target_joints_deg, vels=[100]*6, wait_for_finish=False)
-                    # ik_send_latency_ms = (time.perf_counter() - t_ik_send_start) * 1000.0
+            if self.use_udp_follower and self.p0 is not None:
+                if has_target and valid and target_pos is not None and state != "OBSERVING":
+                    # 发送纯 UDP 偏移，不加任何时间插值或补偿
+                    self.controller.send_udp_target(target_pos, self.p0)
+                    self._last_udp_target = target_pos
                 else:
-                    print(f"[{state}] 警告: IK解算失败")
-
+                    # 目标丢失：悬停在最后看到小球的坐标上方，不回原点
+                    if hasattr(self, '_last_udp_target') and self._last_udp_target is not None:
+                        self.controller.send_udp_target(self._last_udp_target, self.p0)
             else:
-                # 目标丢失或任务完成: 回到初始位置
-                self.controller.move_joint(self.home_joints, vels=[60]*6, wait_for_finish=False)
+                if has_target and valid and target_pos is not None and state != "OBSERVING":
+                    current_joints_deg = self.controller.state.get_joints()
+                    current_j1 = current_joints_deg[0]
+
+                    # 线性插值，使125Hz下运行平滑
+                    time_since_vision = loop_start_time - target_data['timestamp']
+                    interpolated_pos = list(target_pos)
+                    if time_since_vision < 0.05:  # 只在延迟合理的情况下插值
+                        interpolated_pos[1] += target_data['conveyor_speed'] * time_since_vision
+
+                    hover_rpy_deg = [180.0, 0.0, -90.0 + current_j1]
+
+                    target_q_rad, ik_time = self.fast_ik.solve_ik(
+                        pos=interpolated_pos,
+                        rpy_deg=hover_rpy_deg,
+                        current_joints=np.deg2rad(current_joints_deg)
+                    )
+
+                    if target_q_rad is not None:
+                        target_joints_deg = np.rad2deg(target_q_rad).tolist()
+                        self.controller.move_joint(target_joints_deg, vels=[100]*6, wait_for_finish=False)
+                    else:
+                        print(f"[{state}] 警告: IK解算失败")
+
+                else:
+                    # 目标丢失或任务完成: 回到初始位置
+                    self.controller.move_joint(self.home_joints, vels=[60]*6, wait_for_finish=False)
             
             # 频率控制 (125Hz)
             elapsed = time.perf_counter() - loop_start_time

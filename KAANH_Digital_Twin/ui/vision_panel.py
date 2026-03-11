@@ -24,6 +24,7 @@ class VisionPanel(QWidget):
     conveyor_offset_tracking_toggled = pyqtSignal(bool)
     conveyor_speed_changed = pyqtSignal(float)
     conveyor_hover_only_toggled = pyqtSignal(bool)
+    conveyor_udp_follower_tracking_toggled = pyqtSignal(bool)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -139,6 +140,14 @@ class VisionPanel(QWidget):
         self.hover_only_btn.toggled.connect(self.on_hover_only_toggled)
         tracking_layout.addWidget(self.hover_only_btn)
 
+        # 新增：UDP follower_cart 追踪按钮
+        self.udp_follower_tracking_btn = QPushButton("UDP追踪小球")
+        self.udp_follower_tracking_btn.setCheckable(True)
+        self.udp_follower_tracking_btn.setMinimumHeight(50)
+        self.udp_follower_tracking_btn.setStyleSheet("background-color: #e67e22; color: white; font-weight: bold;")
+        self.udp_follower_tracking_btn.toggled.connect(self.on_udp_follower_tracking_toggled)
+        tracking_layout.addWidget(self.udp_follower_tracking_btn)
+
         layout.addWidget(tracking_group)
 
     def on_offset_tracking_toggled(self, checked):
@@ -240,6 +249,11 @@ class VisionPanel(QWidget):
                 self.result_label.setText("错误：CSV 文件为空")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"读取 CSV 失败: {str(e)}")
+
+    def on_udp_follower_tracking_toggled(self, checked):
+        """处理 UDP follower_cart 追踪按钮点击"""
+        self.udp_follower_tracking_btn.setText("停止UDP追踪" if checked else "UDP追踪小球")
+        self.conveyor_udp_follower_tracking_toggled.emit(checked)
 
     def on_udp_execution_clicked(self):
         """点击 UDP 增量执行"""

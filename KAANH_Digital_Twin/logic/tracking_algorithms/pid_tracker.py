@@ -16,6 +16,24 @@ class PIDTrackingAlgorithm(BaseTrackingAlgorithm):
         error_y = tcp_m[1] - target_pos[1]
         real_xy_distance = math.sqrt(error_x**2 + error_y**2)
 
+        # ==========================
+        # 纯UDP位置追踪 (不加任何方法)
+        # ==========================
+        if getattr(ctx, 'use_udp_follower', False):
+            if ctx.last_target_id != target_id:
+                ctx.last_target_id = target_id
+                print(f"--- [UDP纯追踪] 发现新目标 ID={target_id}，纯位置跟随 ---")
+            
+            ctx.state = "TRACKING" # 改变状态，避免被认为是 OBSERVING 导致控制线程忽略
+            
+            # 单纯追踪目标XYZ位置，不加入任何前馈、PID或状态机逻辑
+            pure_target_z = target_pos[2] + ctx.hover_height + ctx.tool_length
+            if int(loop_start_time * 10) % 10 == 0: 
+                actual_tip_z = tcp_m[2] - ctx.tool_length
+                print(f"[UDP纯追踪] 目标X:{target_pos[0]:.3f} Y:{target_pos[1]:.3f} Z:{(pure_target_z - ctx.tool_length):.3f}m | 实际尖端Z:{actual_tip_z:.3f}m | XY误差:{real_xy_distance*1000.0:.1f}mm")
+                
+            return [target_pos[0], target_pos[1], pure_target_z]
+
         # 如果是新进来的目标，立刻重置为 HOVERING
         if ctx.last_target_id != target_id:
             ctx.last_target_id = target_id
@@ -34,7 +52,11 @@ class PIDTrackingAlgorithm(BaseTrackingAlgorithm):
         # ==========================
         # PI 闭环补偿控制 (仅在 Y 轴方向)
         # ==========================
-        if ctx.state in ["HOVERING", "APPROACHING"]:
+        if getattr(ctx, 'use_udp_follower', False):
+            # UDP模式自带闭环跟随，禁用PID补偿防止双重闭环导致震荡
+            ctx.pi_compensation_y = 0.0
+            self.reset()
+        elif ctx.state in ["HOVERING", "APPROACHING"]:
             ctx.pi_integral_y += error_y * ctx.vision_interval
             derivative_y = (error_y - ctx.pi_last_error_y) / ctx.vision_interval
             ctx.pi_last_error_y = error_y

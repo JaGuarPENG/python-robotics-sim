@@ -180,6 +180,22 @@ class TeachPendantWindow(QMainWindow):
             self.tracking_service.use_dynamic_offset = False
             self.tracking_service.stop_tracking()
 
+    def _on_conveyor_udp_follower_tracking_toggled(self, checked):
+        """处理来自 VisionPanel 的 UDP follower_cart 追踪开关请求"""
+        if checked:
+            if not self.controller.state.is_enabled:
+                QMessageBox.warning(self, "警告", "机器人未使能！")
+                self.vision_panel.udp_follower_tracking_btn.blockSignals(True)
+                self.vision_panel.udp_follower_tracking_btn.setChecked(False)
+                self.vision_panel.on_udp_follower_tracking_toggled(False)
+                self.vision_panel.udp_follower_tracking_btn.blockSignals(False)
+                return
+            self.tracking_service.use_udp_follower = True
+            self.tracking_service.start_tracking()
+        else:
+            self.tracking_service.stop_tracking()
+            self.tracking_service.use_udp_follower = False
+
     def _on_conveyor_hover_only_toggled(self, checked):
         """处理来自 VisionPanel 的仅悬停追踪开关请求"""
         if checked:
@@ -294,6 +310,7 @@ class TeachPendantWindow(QMainWindow):
         self.vision_panel.conveyor_offset_tracking_toggled.connect(self._on_conveyor_offset_tracking_toggled)
         self.vision_panel.conveyor_hover_only_toggled.connect(self._on_conveyor_hover_only_toggled)
         self.vision_panel.conveyor_speed_changed.connect(self._on_conveyor_speed_changed)
+        self.vision_panel.conveyor_udp_follower_tracking_toggled.connect(self._on_conveyor_udp_follower_tracking_toggled)
         vision_layout.addWidget(self.vision_panel)
         vision_layout.addStretch()
         self.tabs.addTab(vision_tab, "视觉引导")
@@ -382,7 +399,7 @@ class TeachPendantWindow(QMainWindow):
             # 计算线性偏差 (扣除 50mm Z 轴偏差)
             if self.current_target_point:
                 p = self.current_target_point
-                actual_fixed = np.array([actual_tcp[0], actual_tcp[1], actual_tcp[2] - 50.0])
+                actual_fixed = np.array([actual_tcp[0], actual_tcp[1], actual_tcp[2] - 50.8])
                 lin_err = np.linalg.norm(np.array(p[:3]) - actual_fixed)
                 self.signals.tracking_error_updated.emit(lin_err, 0.0)
         else:
@@ -505,45 +522,74 @@ class TeachPendantWindow(QMainWindow):
         if time_step is not None:
             target_interval = time_step
             frequency = 1.0 / time_step
-            print(f"\nUDP 轨迹执行 (使用轨迹自带频率: {frequency:.1f}Hz, 间隔: {time_step*1000:.2f}ms)")
+            print(f"\nUDP 轨迹执行 (频率: {frequency:.1f}Hz, 间隔: {time_step*1000:.2f}ms)")
         else:
             target_interval = 1.0 / self.playback_frequency
-            print(f"\nUDP 轨迹执行性能报告 (Hz: {self.playback_frequency})")
+            frequency = self.playback_frequency
+            print(f"\nUDP 轨迹执行 (Hz: {self.playback_frequency})")
         
-        print(f"{'点位':<8} | {'偏移 X(mm)':<12} | {'偏移 Y(mm)':<12} | {'总周期(ms)':<12}")
-        print("-" * 60)
         try:
-            # 记录轨迹起始点作为基准 (Origin)
-            # 注意：UDP 跟随模式下，下发的值是相对于机器人进入 follower_cart 瞬间位置的偏移
-            # 我们假设进入模式时机器人刚好在 CSV 的第一个点附近，或者我们下发的是 CSV 内部的相对位移
+            # follower_cart 启动后，机器人当前位置即为"零点"
+            # pe 发送的是相对于零点的累积偏移 (m, rad)
+            # 这里以 CSV 第一个点为基准，后续点相对于它计算偏移
+            # 前提：_run_udp_pipeline 已通过 IK 将机器人移到 CSV 第一个点
             p_start = np.array(points[0])
-            
+
+            # 重置 controller 的累积偏移，保持与手动遥操作一致
+            self.controller.follower_offset.fill(0)
+
+            print(f"[UDP轨迹] CSV起始点 p_start = {np.round(p_start, 3).tolist()}")
+            print(f"[UDP轨迹] 共 {len(points)} 个点，开始执行...")
+            print(f"{'帧':<6} | {'CSV_X':>10} {'CSV_Y':>10} {'CSV_Z':>10} | "
+                  f"{'delta_X(mm)':>12} {'delta_Y(mm)':>12} {'delta_Z(mm)':>12} | "
+                  f"{'发送_x(m)':>10} {'发送_y(m)':>10} {'发送_z(m)':>10} | "
+                  f"{'机器人X':>10} {'机器人Y':>10} {'机器人Z':>10}")
+            print("-" * 130)
+
             for i, p in enumerate(points):
                 t_loop_start = time.perf_counter()
                 if not self.controller.state.is_enabled or not self.controller.is_follower_mode:
                     break
-                
+
                 self.current_target_point = p
-                
-                # 计算相对于轨迹起始点的增量 (单位: mm, deg)
-                p_current = np.array(p)
-                delta = p_current - p_start
-                
-                # 转换单位: mm -> m, deg -> rad
+
+                # 当前点相对于起始点的偏移 (mm, deg)
+                delta = np.array(p) - p_start
+
+                # 转换单位: mm -> m, deg -> rad，Z轴取反与 send_raw_increment 保持一致
                 dx, dy, dz = delta[:3] / 1000.0
                 drx, dry, drz = np.deg2rad(delta[3:])
-                
-                # 发送位姿 (UDP 协议)
-                # 直接使用 udp_client.send_pose_euler，因为它是绝对增量
-                # 注意：交换 dx 和 dy 以修正坐标系方向
-                self.controller.udp_client.send_pose_euler(dy, dx, -dz, drx, dry, drz)
-                
-                dt_total = (time.perf_counter() - t_loop_start) * 1000
-                if i % 10 == 0:
-                    print(f"{i:<8} | {delta[0]:<12.2f} | {delta[1]:<12.2f} | {dt_total:<12.2f}")
-                
+
+                # 坐标映射：CSV基座坐标 → 工具坐标系 (X/Y互换，Z取反)
+                self.controller.follower_offset[:] = [dy, dx, -dz, dry, drx, drz]
+
+                # 发送给机器人
+                self.controller.udp_client.send_pose_euler(dy, dx, -dz, dry, drx, drz)
+
+                # 每帧打印
+                tcp = self.controller.state.get_tcp()
+                tcp_str = f"{tcp[0]:>10.2f} {tcp[1]:>10.2f} {tcp[2]:>10.2f}" if tcp else f"{'N/A':>10} {'N/A':>10} {'N/A':>10}"
+                print(f"{i:<6} | {p[0]:>10.2f} {p[1]:>10.2f} {p[2]:>10.2f} | "
+                      f"{delta[0]:>12.2f} {delta[1]:>12.2f} {delta[2]:>12.2f} | "
+                      f"{dy:>10.4f} {dx:>10.4f} {-dz:>10.4f} | "
+                      f"{tcp_str}")
+
                 time.sleep(max(0, target_interval - (time.perf_counter() - t_loop_start)))
             
+            # 轨迹播放完毕，持续发送最终目标 2 秒，让机器人到位
+            print(f"[UDP轨迹] 轨迹播完，保持最终目标 2s 等待机器人到位...")
+            hold_start = time.perf_counter()
+            while time.perf_counter() - hold_start < 2.0:
+                self.controller.udp_client.send_pose_euler(
+                    *self.controller.follower_offset[:3],
+                    *self.controller.follower_offset[3:]
+                )
+                time.sleep(0.02)
+
+            tcp = self.controller.state.get_tcp()
+            if tcp:
+                print(f"[UDP轨迹] 最终位置: X={tcp[0]:.2f} Y={tcp[1]:.2f} Z={tcp[2]:.2f}")
+
             self.is_recording_actual = False
             self.signals.status_updated.emit("UDP 轨迹执行完成")
         except Exception as e:
