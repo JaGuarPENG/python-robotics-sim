@@ -1,0 +1,83 @@
+Windows PowerShell
+版权所有（C） Microsoft Corporation。保留所有权利。
+
+安装最新的 PowerShell，了解新功能和改进！https://aka.ms/PSWindows
+
+PS C:\Users\yangx> ssh kaanh@192.168.0.10
+kaanh@192.168.0.10's password:
+Last login: Sat Feb 28 10:54:16 2026 from 192.168.0.12
+kaanh@kaanh:~$ ls
+ Desktop     Downloads     KaanhConfigTool   Music      Public  'Sunlogin Files'   Videos
+ Documents   env_install   kaanh.xml         Pictures   snap     Templates
+kaanh@kaanh:~$ cd Desktop/
+kaanh@kaanh:~/Desktop$ ls
+kaanh-project  kaanh-project.tar.gz  servertool
+kaanh@kaanh:~/Desktop$ cd kaanh-project/
+kaanh@kaanh:~/Desktop/kaanh-project$ ls
+doc  ethercat.xml  kaanhbin  kaanh.xml  log  program  syslog.db
+kaanh@kaanh:~/Desktop/kaanh-project$ sudo ./kaanhbin
+port:5866
+xmlpath:"/home/kaanh/Desktop/kaanh-project/./kaanh.xml"
+path:"/home/kaanh/Desktop/kaanh-project/./kaanh.xml"
+logfolder:"/home/kaanh/Desktop/kaanh-project/./log"
+/-----------pos vel acc-------------------/
+
+17.453293   17.453293   17.453293   17.453293   17.453293   17.453293
+
+
+17.453293   17.453293   17.453293   17.453293   17.453293   17.453293
+
+
+2.617994   2.617994   2.617994   3.141593   3.141593   3.141593
+
+
+17.453293   17.453293   17.453293   17.453293   17.453293   17.453293
+
+motor size: 6
+model motion size: 6
+io size: 0
+fs size: 0
+aris-log -- 服务器分析指令 1 : md
+aris-log -- server prepare cmd 1
+cmd 1---md
+    1---md
+    1---         all :
+    1---  limit_time : 10000
+    1---        mode : 8
+
+aris-log -- md
+         all :
+  limit_time : 10000
+        mode : 8
+
+aris-log -- server execute cmd 1
+aris-log -- 服务器分析指令 2 : rc
+aris-log -- server prepare cmd 2
+RT0 1---cmd finished, spend 1 counts
+cmd 2---rc
+    2---rc
+
+aris-log -- rc
+
+aris-log -- server execute cmd 2
+aris-log -- cmd 1 stastics:
+       avg time(ns):91452
+       max time(ns):91452
+           in count:0
+       min time(ns):91452
+           in count:0
+        total count:1
+           overruns:0
+
+aris-log -- server collect cmd 1
+RT0 2---cmd finished, spend 5 counts
+aris-log -- cmd 2 stastics:
+       avg time(ns):74736
+       max time(ns):112135
+           in count:0
+       min time(ns):49980
+           in count:4
+        total count:5
+           overruns:0
+
+aris-log -- server collect cmd 2

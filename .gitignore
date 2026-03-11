@@ -8,3 +8,5 @@ __pycache__/
 
 # 你的仿真视频输出 (避免仓库体积过大)
 output/
+.gemini/
+gha-creds-*.json
