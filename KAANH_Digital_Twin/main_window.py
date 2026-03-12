@@ -350,15 +350,18 @@ class TeachPendantWindow(QMainWindow):
                 # 控制发送频率 50Hz
                 time.sleep(max(0, 0.02 - (time.perf_counter() - t_loop_start)))
             
-            # 7. 获取最终位置
-            final_tcp = self.controller.get_current_tcp_mm_deg()
-            if final_tcp:
+            # 7. 获取最终位置（探针尖端位置）
+            final_flange_tcp = self.controller.get_current_tcp_mm_deg()
+            if final_flange_tcp:
+                final_tip_x = final_flange_tcp[0]
+                final_tip_y = final_flange_tcp[1]
+                final_tip_z = final_flange_tcp[2] - probe_length
                 error = np.linalg.norm([
-                    final_tcp[0] - target_x,
-                    final_tcp[1] - target_y,
-                    final_tcp[2] - target_z
+                    final_tip_x - target_tip_x,
+                    final_tip_y - target_tip_y,
+                    final_tip_z - target_tip_z
                 ])
-                print(f"[完成] 最终位置: X={final_tcp[0]:.2f}, Y={final_tcp[1]:.2f}, Z={final_tcp[2]:.2f}")
+                print(f"[完成] 探针尖端位置: X={final_tip_x:.2f}, Y={final_tip_y:.2f}, Z={final_tip_z:.2f}")
                 print(f"[完成] 位置误差: {error:.2f}mm")
                 self.signals.status_updated.emit(f"单点移动完成，误差: {error:.2f}mm")
             else:
