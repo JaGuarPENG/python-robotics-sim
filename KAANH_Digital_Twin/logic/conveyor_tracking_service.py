@@ -229,15 +229,37 @@ class ConveyorTrackingService(QObject):
             if self.use_udp_follower and self.p0 is not None:
                 # UDP追踪悬停高度（小球上方50mm）
                 hover_height = 0.050  # 50mm
+                # 自适应前馈参数：预瞄时间（秒）
+                lookahead_time = 0.15  # 150ms预瞄，可根据实际情况调整
                 
                 if has_target and valid and target_pos is not None and state != "OBSERVING":
+                    # 计算视觉延迟
+                    time_since_vision = loop_start_time - target_data['timestamp']
+                    
+                    # 计算前馈补偿后的目标位置
+                    # 传送带沿Y轴运动，速度为conveyor_speed_y
+                    conveyor_speed = target_data.get('conveyor_speed', self.conveyor_speed_y)
+                    
+                    # 预瞄位置 = 当前位置 + 速度 × (预瞄时间 + 视觉延迟)
+                    total_latency = lookahead_time + time_since_vision
+                    predicted_pos = list(target_pos)
+                    predicted_pos[1] += conveyor_speed * total_latency  # Y轴前馈补偿
+                    
                     # 计算悬停位置：小球上方50mm
-                    hover_pos = list(target_pos)
+                    hover_pos = list(predicted_pos)
                     hover_pos[2] += hover_height  # Z轴向上偏移50mm
                     
-                    # 发送UDP偏移到悬停位置
+                    # 发送UDP偏移到悬停位置（带前馈补偿）
                     self.controller.send_udp_target(hover_pos, self.p0)
                     self._last_udp_target = hover_pos
+                    
+                    # 调试输出（每30帧输出一次，避免刷屏）
+                    if not hasattr(self, '_udp_debug_counter'):
+                        self._udp_debug_counter = 0
+                    self._udp_debug_counter += 1
+                    if self._udp_debug_counter % 30 == 0:
+                        print(f"[UDP追踪] 当前Y:{target_pos[1]:.3f}m 预测Y:{predicted_pos[1]:.3f}m "
+                              f"速度:{conveyor_speed:.3f}m/s 延迟:{total_latency*1000:.1f}ms")
                 else:
                     # 目标丢失：悬停在最后看到小球的坐标上方，不回原点
                     if hasattr(self, '_last_udp_target') and self._last_udp_target is not None:
