@@ -166,6 +166,7 @@ class TeachPendantWindow(QMainWindow):
                 self.vision_panel.udp_feedforward_btn.blockSignals(False)
                 return
             self.tracking_service.use_udp_feedforward = True
+            self.tracking_service.hover_only_mode = True  # 仅悬停，不触碰
             self.tracking_service.start_tracking()
         else:
             self.tracking_service.stop_tracking()
