@@ -123,17 +123,17 @@ class VisionPanel(QWidget):
         
         self.white_points_count_label = QLabel("视野内: 0个")
         self.white_points_count_label.setStyleSheet(
-            "color: #f39c12; font-weight: bold; font-size: 16px;"
+            "color: #f39c12; font-weight: bold; font-size: 28px;"
         )
         detect_layout.addWidget(self.white_points_count_label)
 
         self.white_points_text = QLabel("暂无白点")
         self.white_points_text.setWordWrap(True)
         self.white_points_text.setStyleSheet(
-            "color: #ecf0f1; font-family: Courier New; font-size: 14px;"
+            "color: #ecf0f1; font-family: Courier New; font-size: 24px;"
         )
         self.white_points_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.white_points_text.setMinimumHeight(80)
+        self.white_points_text.setMinimumHeight(120)
         detect_layout.addWidget(self.white_points_text)
 
         self.white_points_toggle_btn = QPushButton("🔍 启用检测")
