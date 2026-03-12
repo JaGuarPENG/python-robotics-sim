@@ -172,30 +172,43 @@ class ConveyorTrackingService(QObject):
                 tcp_mm = self.controller.state.get_tcp()
                 tcp_m = [tcp_mm[0]/1000.0, tcp_mm[1]/1000.0, tcp_mm[2]/1000.0]
                 
-                # 选择激活的算法
-                if self.use_sim_algorithm:
-                    alg = self.algorithms["SIM"]
-                elif self.use_dynamic_offset:
-                    alg = self.algorithms["OFFSET"]
-                else:
-                    alg = self.algorithms["PID"]
+                # UDP模式跳过算法执行，直接使用目标位置
+                if self.use_udp_follower or self.use_udp_feedforward:
+                    final_target_pos = target_pos  # UDP模式直接使用目标位置，不做任何处理
                     
-                if self.active_algorithm != alg:
-                    self.active_algorithm = alg
-                    self.active_algorithm.reset()
-                    
-                # 执行策略
-                final_target_pos = self.active_algorithm.execute_vision_cycle(target_pos, target_id, tcp_m, loop_start_time)
-                
-                # 写入缓冲区供控制线程读取
-                if final_target_pos is not None:
+                    # 写入缓冲区供UDP控制循环读取
                     with self._target_lock:
                         self._target_buffer['pos'] = final_target_pos
                         self._target_buffer['timestamp'] = time.perf_counter()
                         self._target_buffer['valid'] = True
-                        self._target_buffer['state'] = self.state
+                        self._target_buffer['state'] = "HOVERING"  # UDP模式固定为HOVERING状态
                         self._target_buffer['has_target'] = True
                         self._target_buffer['conveyor_speed'] = self.conveyor_speed_y
+                else:
+                    # 非UDP模式：使用算法（PID/SIM/OFFSET）
+                    if self.use_sim_algorithm:
+                        alg = self.algorithms["SIM"]
+                    elif self.use_dynamic_offset:
+                        alg = self.algorithms["OFFSET"]
+                    else:
+                        alg = self.algorithms["PID"]
+                        
+                    if self.active_algorithm != alg:
+                        self.active_algorithm = alg
+                        self.active_algorithm.reset()
+                        
+                    # 执行策略
+                    final_target_pos = self.active_algorithm.execute_vision_cycle(target_pos, target_id, tcp_m, loop_start_time)
+                    
+                    # 写入缓冲区供控制线程读取
+                    if final_target_pos is not None:
+                        with self._target_lock:
+                            self._target_buffer['pos'] = final_target_pos
+                            self._target_buffer['timestamp'] = time.perf_counter()
+                            self._target_buffer['valid'] = True
+                            self._target_buffer['state'] = self.state
+                            self._target_buffer['has_target'] = True
+                            self._target_buffer['conveyor_speed'] = self.conveyor_speed_y
 
             else:
                 if self.state != "OBSERVING":
