@@ -224,12 +224,24 @@ class RobotController:
         return [tcp_mm[0]/1000.0, tcp_mm[1]/1000.0, tcp_mm[2]/1000.0]
 
     def send_udp_target(self, target_m, p0_m):
-        """发送 UDP 偏移目标（基座坐标系 -> 工具坐标系映射）"""
-        dx = target_m[0] - p0_m[0]
-        dy = target_m[1] - p0_m[1]
-        dz = target_m[2] - p0_m[2]
-        # 坐标映射：基座 → 工具坐标系（按用户指示，应该是 yxz 顺序）
-        self.udp_client.send_pose_euler(dy, dx, -dz, 0, 0, 0)
+        """
+        发送 UDP 偏移目标（基座坐标系 -> 工具坐标系映射）
+        使用与单点遥操作一致的坐标映射：
+        - X 直接对应
+        - Y 需要取反
+        - Z 需要取反
+        """
+        # 计算基座坐标系下的偏移量
+        offset_x = target_m[0] - p0_m[0]  # 基座X偏移
+        offset_y = target_m[1] - p0_m[1]  # 基座Y偏移
+        offset_z = target_m[2] - p0_m[2]  # 基座Z偏移
+        
+        # 坐标映射：基座 → 工具坐标系
+        send_x = offset_x      # X 直接对应
+        send_y = -offset_y     # Y 取反
+        send_z = -offset_z     # Z 取反
+        
+        self.udp_client.send_pose_euler(send_x, send_y, send_z, 0, 0, 0)
 
     def start_follower_mode(self, ip):
         if self.ws_client.init_follower_mode(login_first=False, skip_enable=self.state.is_enabled):
