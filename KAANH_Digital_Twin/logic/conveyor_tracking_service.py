@@ -232,8 +232,9 @@ class ConveyorTrackingService(QObject):
             if self.use_udp_feedforward and self.p0 is not None:
                 # ========== UDP+前馈测试模式（实验性）==========
                 hover_height = 0.050  # 50mm
-                # 自适应前馈参数：预瞄时间（秒）
-                lookahead_time = 0.15  # 150ms预瞄，可根据实际情况调整
+                # 前馈参数调整（减小预瞄时间，避免过度补偿）
+                lookahead_time = 0.05  # 50ms预瞄（原来是150ms，太长了导致跑太快）
+                feedforward_gain = 0.5  # 前馈增益0.5，可以根据效果调整（0~1）
                 
                 if has_target and valid and target_pos is not None and state != "OBSERVING":
                     # 计算视觉延迟
@@ -242,8 +243,9 @@ class ConveyorTrackingService(QObject):
                     # 计算前馈补偿后的目标位置
                     conveyor_speed = target_data.get('conveyor_speed', self.conveyor_speed_y)
                     
-                    # 预瞄位置 = 当前位置 + 速度 × (预瞄时间 + 视觉延迟)
-                    total_latency = lookahead_time + time_since_vision
+                    # 预瞄位置 = 当前位置 + 速度 × (预瞄时间 + 视觉延迟) × 增益
+                    # 增益用于控制前馈强度，避免过度补偿
+                    total_latency = (lookahead_time + time_since_vision) * feedforward_gain
                     predicted_pos = list(target_pos)
                     predicted_pos[1] += conveyor_speed * total_latency  # Y轴前馈补偿
                     
