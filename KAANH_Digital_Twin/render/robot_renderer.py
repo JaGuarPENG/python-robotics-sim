@@ -236,13 +236,14 @@ class RobotRenderer:
 
     def get_visible_white_points(self, T_ee=None):
         """
-        获取视野范围内所有白点（WAITING状态）的位置信息
+        获取视野范围内所有白点/绿点的位置信息
         
         Args:
             T_ee: 末端执行器位姿矩阵 (4x4)，如果为None则使用当前渲染的位姿
             
         Returns:
-            list: [(x, y, z, id), ...] 视野内白点的世界坐标和ID列表
+            list: [(x, y, z, id, state), ...] 视野内点的世界坐标、ID和状态列表
+                  state: 0=白点(WAITING), 1=绿点(TRACKING), 2=红点(REACHED)
         """
         if T_ee is None:
             # 使用当前显示的末端位姿
@@ -252,8 +253,8 @@ class RobotRenderer:
         visible_points = []
         
         for i, state in enumerate(self.belt_states):
-            # 只检测 WAITING 状态的白点 (state == 0)
-            if state != 0:
+            # 跳过已到达的红点 (state == 2)
+            if state == 2:
                 continue
                 
             world_pos = np.array([self.obj_x_coords[i], self.obj_y_coords[i], 0.211, 1.0])
@@ -272,7 +273,8 @@ class RobotRenderer:
                     self.obj_x_coords[i],
                     self.obj_y_coords[i],
                     0.211,
-                    i
+                    i,
+                    state  # 0=白点, 1=绿点
                 ))
         
         return visible_points

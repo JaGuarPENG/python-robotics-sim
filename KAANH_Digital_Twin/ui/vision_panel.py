@@ -258,6 +258,7 @@ class VisionPanel(QWidget):
             QPushButton { background-color: #9b59b6; color: white; font-weight: bold; }
             QPushButton:checked { background-color: #e74c3c; }
         """)
+        self.white_points_toggle_btn.toggled.connect(self.on_white_points_toggle)
         white_points_layout.addWidget(self.white_points_toggle_btn)
 
         layout.addWidget(white_points_group)
@@ -413,21 +414,37 @@ class VisionPanel(QWidget):
         self.ry_input.setText(f"{ry:.2f}")
         self.rz_input.setText(f"{rz:.2f}")
     
-    def update_white_points_display(self, white_points_list):
+    def on_white_points_toggle(self, checked):
+        """处理白点检测按钮状态改变"""
+        if checked:
+            self.white_points_toggle_btn.setText("🔴 禁用白点检测")
+        else:
+            self.white_points_toggle_btn.setText("🔍 启用白点检测")
+            # 清空显示
+            self.white_points_count_label.setText("视野内: 0个")
+            self.white_points_text.setText("检测已禁用")
+    
+    def update_white_points_display(self, points_list):
         """
-        更新视野内白点位置显示
+        更新视野内白点/绿点位置显示
         
         Args:
-            white_points_list: [(x, y, z, id), ...] 白点位置列表（单位：米）
+            points_list: [(x, y, z, id, state), ...] 点位置列表（单位：米）
+                        state: 0=白点(WAITING), 1=绿点(TRACKING)
         """
-        count = len(white_points_list)
-        self.white_points_count_label.setText(f"视野内白点数量: {count}")
+        count = len(points_list)
+        white_count = sum(1 for p in points_list if p[4] == 0)
+        green_count = sum(1 for p in points_list if p[4] == 1)
+        
+        self.white_points_count_label.setText(f"视野内: {count}个 (白:{white_count} 绿:{green_count})")
         
         if count == 0:
             self.white_points_text.setText("暂无白点进入视野")
         else:
-            text_lines = ["白点位置 (X, Y, Z mm):"]
-            for x, y, z, pid in white_points_list:
+            text_lines = ["点位置 (X, Y, Z mm):"]
+            for x, y, z, pid, state in points_list:
+                # 根据状态选择颜色标签
+                status_label = "🟢追踪" if state == 1 else "⚪等待"
                 # 转换为毫米并格式化
-                text_lines.append(f"  ID{pid}: X={x*1000:6.1f} Y={y*1000:6.1f} Z={z*1000:6.1f}")
+                text_lines.append(f"  ID{pid} {status_label}: X={x*1000:6.1f} Y={y*1000:6.1f} Z={z*1000:6.1f}")
             self.white_points_text.setText("\n".join(text_lines))
