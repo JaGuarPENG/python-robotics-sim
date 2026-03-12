@@ -227,13 +227,13 @@ class ConveyorTrackingService(QObject):
             target_pos = target_data.get('pos')
             
             if self.use_udp_follower and self.p0 is not None:
-                # UDP追踪悬停高度（小球上方25mm）
-                hover_height = 0.025  # 25mm
+                # UDP追踪悬停高度（小球上方50mm）
+                hover_height = 0.050  # 50mm
                 
                 if has_target and valid and target_pos is not None and state != "OBSERVING":
-                    # 计算悬停位置：小球上方25mm
+                    # 计算悬停位置：小球上方50mm
                     hover_pos = list(target_pos)
-                    hover_pos[2] += hover_height  # Z轴向上偏移25mm
+                    hover_pos[2] += hover_height  # Z轴向上偏移50mm
                     
                     # 发送UDP偏移到悬停位置
                     self.controller.send_udp_target(hover_pos, self.p0)
