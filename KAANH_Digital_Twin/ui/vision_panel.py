@@ -160,41 +160,37 @@ class VisionPanel(QWidget):
         speed_layout.addWidget(self.speed_val_label)
         layout.addLayout(speed_layout)
 
-        # 追踪按钮 - 使用紧凑布局
-        tracking_grid = QGridLayout()
-        tracking_grid.setSpacing(3)
+        # 追踪模式 - 只保留自适应和UDP追踪
+        tracking_layout = QVBoxLayout()
+        tracking_layout.setSpacing(5)
         
-        self.tracking_btn = QPushButton("绝对PID")
-        self.tracking_btn.setCheckable(True)
-        self.tracking_btn.setStyleSheet("background-color: #27ae60; color: white;")
-        self.tracking_btn.toggled.connect(self.on_tracking_toggled)
-        tracking_grid.addWidget(self.tracking_btn, 0, 0)
-
-        self.sim_tracking_btn = QPushButton("仿真PI")
-        self.sim_tracking_btn.setCheckable(True)
-        self.sim_tracking_btn.setStyleSheet("background-color: #3498db; color: white;")
-        self.sim_tracking_btn.toggled.connect(self.on_sim_tracking_toggled)
-        tracking_grid.addWidget(self.sim_tracking_btn, 0, 1)
-
-        self.offset_tracking_btn = QPushButton("自适应")
+        tracking_label = QLabel("追踪模式:")
+        tracking_label.setStyleSheet("color: #bdc3c7; font-size: 12px;")
+        tracking_layout.addWidget(tracking_label)
+        
+        # 自适应追踪按钮
+        self.offset_tracking_btn = QPushButton("🎯 自适应追踪")
         self.offset_tracking_btn.setCheckable(True)
-        self.offset_tracking_btn.setStyleSheet("background-color: #9b59b6; color: white;")
+        self.offset_tracking_btn.setMinimumHeight(45)
+        self.offset_tracking_btn.setStyleSheet("""
+            QPushButton { background-color: #9b59b6; color: white; font-weight: bold; font-size: 14px; }
+            QPushButton:checked { background-color: #e74c3c; }
+        """)
         self.offset_tracking_btn.toggled.connect(self.on_offset_tracking_toggled)
-        tracking_grid.addWidget(self.offset_tracking_btn, 1, 0)
-
-        self.hover_only_btn = QPushButton("仅悬停")
-        self.hover_only_btn.setCheckable(True)
-        self.hover_only_btn.setStyleSheet("background-color: #34495e; color: white;")
-        self.hover_only_btn.toggled.connect(self.on_hover_only_toggled)
-        tracking_grid.addWidget(self.hover_only_btn, 1, 1)
+        tracking_layout.addWidget(self.offset_tracking_btn)
         
-        self.udp_follower_tracking_btn = QPushButton("UDP追踪")
+        # UDP追踪按钮
+        self.udp_follower_tracking_btn = QPushButton("📡 UDP追踪")
         self.udp_follower_tracking_btn.setCheckable(True)
-        self.udp_follower_tracking_btn.setStyleSheet("background-color: #e67e22; color: white;")
+        self.udp_follower_tracking_btn.setMinimumHeight(45)
+        self.udp_follower_tracking_btn.setStyleSheet("""
+            QPushButton { background-color: #e67e22; color: white; font-weight: bold; font-size: 14px; }
+            QPushButton:checked { background-color: #e74c3c; }
+        """)
         self.udp_follower_tracking_btn.toggled.connect(self.on_udp_follower_tracking_toggled)
-        tracking_grid.addWidget(self.udp_follower_tracking_btn, 2, 0, 1, 2)
+        tracking_layout.addWidget(self.udp_follower_tracking_btn)
         
-        layout.addLayout(tracking_grid)
+        layout.addLayout(tracking_layout)
         layout.addStretch()
         return tab
 
@@ -400,22 +396,10 @@ class VisionPanel(QWidget):
             self.white_points_text.setText("\n".join(lines[:5]))  # 最多显示5个
 
     # 追踪按钮处理
-    def on_tracking_toggled(self, checked):
-        self.tracking_btn.setText("停止" if checked else "绝对PID")
-        self.conveyor_tracking_toggled.emit(checked)
-
-    def on_sim_tracking_toggled(self, checked):
-        self.sim_tracking_btn.setText("停止" if checked else "仿真PI")
-        self.conveyor_sim_tracking_toggled.emit(checked)
-
     def on_offset_tracking_toggled(self, checked):
-        self.offset_tracking_btn.setText("停止" if checked else "自适应")
+        self.offset_tracking_btn.setText("🛑 停止自适应" if checked else "🎯 自适应追踪")
         self.conveyor_offset_tracking_toggled.emit(checked)
 
-    def on_hover_only_toggled(self, checked):
-        self.hover_only_btn.setText("停止" if checked else "仅悬停")
-        self.conveyor_hover_only_toggled.emit(checked)
-
     def on_udp_follower_tracking_toggled(self, checked):
-        self.udp_follower_tracking_btn.setText("停止" if checked else "UDP追踪")
+        self.udp_follower_tracking_btn.setText("🛑 停止UDP" if checked else "📡 UDP追踪")
         self.conveyor_udp_follower_tracking_toggled.emit(checked)
