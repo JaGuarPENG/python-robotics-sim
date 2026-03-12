@@ -255,13 +255,28 @@ class ConveyorTrackingService(QObject):
                     self.controller.send_udp_target(hover_pos, self.p0)
                     self._last_udp_target = hover_pos
                     
-                    # 调试输出
-                    if not hasattr(self, '_udp_ff_debug_counter'):
-                        self._udp_ff_debug_counter = 0
-                    self._udp_ff_debug_counter += 1
-                    if self._udp_ff_debug_counter % 30 == 0:
-                        print(f"[UDP+前馈] 当前Y:{target_pos[1]:.3f}m 预测Y:{predicted_pos[1]:.3f}m "
-                              f"速度:{conveyor_speed:.3f}m/s 延迟:{total_latency*1000:.1f}ms")
+                    # 计算误差（获取当前实际位置）
+                    tcp_mm = self.controller.state.get_tcp()
+                    if tcp_mm:
+                        actual_tip_z = tcp_mm[2]/1000.0 - self.tool_length
+                        xy_error = np.sqrt((tcp_mm[0]/1000.0 - target_pos[0])**2 + 
+                                          (tcp_mm[1]/1000.0 - target_pos[1])**2) * 1000.0  # mm
+                        
+                        # 调试输出（每30帧输出一次，避免刷屏）
+                        if not hasattr(self, '_udp_ff_debug_counter'):
+                            self._udp_ff_debug_counter = 0
+                        self._udp_ff_debug_counter += 1
+                        if self._udp_ff_debug_counter % 30 == 0:
+                            print(f"[UDP+前馈] 当前Y:{target_pos[1]:.3f}m 预测Y:{predicted_pos[1]:.3f}m "
+                                  f"速度:{conveyor_speed:.3f}m/s 延迟:{total_latency*1000:.1f}ms | XY误差:{xy_error:.1f}mm")
+                    else:
+                        # 无TCP数据，只输出前馈信息
+                        if not hasattr(self, '_udp_ff_debug_counter'):
+                            self._udp_ff_debug_counter = 0
+                        self._udp_ff_debug_counter += 1
+                        if self._udp_ff_debug_counter % 30 == 0:
+                            print(f"[UDP+前馈] 当前Y:{target_pos[1]:.3f}m 预测Y:{predicted_pos[1]:.3f}m "
+                                  f"速度:{conveyor_speed:.3f}m/s 延迟:{total_latency*1000:.1f}ms")
                 else:
                     # 目标丢失：悬停在最后看到小球的坐标上方
                     if hasattr(self, '_last_udp_target') and self._last_udp_target is not None:
@@ -279,10 +294,18 @@ class ConveyorTrackingService(QObject):
                     # 发送UDP偏移到悬停位置（无补偿）
                     self.controller.send_udp_target(hover_pos, self.p0)
                     self._last_udp_target = hover_pos
-                    self._udp_debug_counter += 1
-                    if self._udp_debug_counter % 30 == 0:
-                        print(f"[UDP追踪] 当前Y:{target_pos[1]:.3f}m 预测Y:{predicted_pos[1]:.3f}m "
-                              f"速度:{conveyor_speed:.3f}m/s 延迟:{total_latency*1000:.1f}ms")
+                    
+                    # 计算误差（获取当前实际位置）
+                    tcp_mm = self.controller.state.get_tcp()
+                    if tcp_mm:
+                        xy_error = np.sqrt((tcp_mm[0]/1000.0 - target_pos[0])**2 + 
+                                          (tcp_mm[1]/1000.0 - target_pos[1])**2) * 1000.0  # mm
+                        
+                        if not hasattr(self, '_udp_debug_counter'):
+                            self._udp_debug_counter = 0
+                        self._udp_debug_counter += 1
+                        if self._udp_debug_counter % 30 == 0:
+                            print(f"[UDP追踪] 目标Y:{target_pos[1]:.3f}m 实际Y:{tcp_mm[1]/1000.0:.3f}m | XY误差:{xy_error:.1f}mm")
                 else:
                     # 目标丢失：悬停在最后看到小球的坐标上方，不回原点
                     if hasattr(self, '_last_udp_target') and self._last_udp_target is not None:
