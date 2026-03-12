@@ -197,64 +197,86 @@ class TeachPendantWindow(QMainWindow):
             self.tracking_service.use_udp_follower = False
 
     def _on_get_current_position_requested(self):
-        """处理获取当前坐标请求"""
+        """处理获取当前坐标请求 - 显示探针尖端位置"""
         if not self.controller.state.is_enabled:
             QMessageBox.warning(self, "警告", "机器人未使能，请先连接并使能机器人！")
             return
         
-        # 使用 controller 获取当前 TCP（已通过 follower_client 修正旋转顺序）
+        # 使用 controller 获取当前 TCP（法兰盘位置）
         tcp = self.controller.get_current_tcp_mm_deg()
         if tcp:
+            # 转换为探针尖端位置（探针长度 200mm，向下安装）
+            # 注意：这里假设探针沿 Z 轴负方向延伸
+            probe_length = 200.0  # mm
+            tip_x = tcp[0]
+            tip_y = tcp[1]
+            tip_z = tcp[2] - probe_length  # Z轴减去探针长度
+            tip_rx = tcp[3]
+            tip_ry = tcp[4]
+            tip_rz = tcp[5]
+            
             self.vision_panel.update_current_position_display(
-                tcp[0], tcp[1], tcp[2], tcp[3], tcp[4], tcp[5]
+                tip_x, tip_y, tip_z, tip_rx, tip_ry, tip_rz
             )
-            self.statusBar.showMessage(f"当前坐标: X={tcp[0]:.2f}, Y={tcp[1]:.2f}, Z={tcp[2]:.2f}, Rx={tcp[3]:.2f}, Ry={tcp[4]:.2f}, Rz={tcp[5]:.2f}")
+            self.statusBar.showMessage(
+                f"探针尖端: X={tip_x:.2f}, Y={tip_y:.2f}, Z={tip_z:.2f}, "
+                f"Rx={tip_rx:.2f}, Ry={tip_ry:.2f}, Rz={tip_rz:.2f}"
+            )
         else:
             QMessageBox.warning(self, "警告", "无法获取当前坐标")
 
-    def _on_single_point_move_requested(self, target_x, target_y, target_z, target_rx, target_ry, target_rz):
+    def _on_single_point_move_requested(self, target_tip_x, target_tip_y, target_tip_z, 
+                                         target_tip_rx, target_tip_ry, target_tip_rz):
         """
         处理单点遥操作移动请求
-        从当前位置移动到目标绝对坐标位置
+        用户输入的是探针尖端目标位置，需要转换为法兰盘位置执行移动
         """
         # 检查机器人状态
         if not self.controller.state.is_enabled:
             QMessageBox.warning(self, "警告", "机器人未使能，请先连接并使能机器人！")
             return
         
-        # 获取当前位置作为原点
-        origin_tcp = self.controller.get_current_tcp_mm_deg()
-        if not origin_tcp:
+        # 获取当前法兰盘位置
+        origin_flange_tcp = self.controller.get_current_tcp_mm_deg()
+        if not origin_flange_tcp:
             QMessageBox.warning(self, "警告", "无法获取当前坐标，请先点击'获取当前坐标'")
             return
         
-        # 计算偏移量
-        offset_x = target_x - origin_tcp[0]
-        offset_y = target_y - origin_tcp[1]
-        offset_z = target_z - origin_tcp[2]
-        offset_rx = target_rx - origin_tcp[3]
-        offset_ry = target_ry - origin_tcp[4]
-        offset_rz = target_rz - origin_tcp[5]
+        # 将当前法兰盘位置转换为探针尖端位置（用于显示）
+        probe_length = 200.0  # mm
+        origin_tip_x = origin_flange_tcp[0]
+        origin_tip_y = origin_flange_tcp[1]
+        origin_tip_z = origin_flange_tcp[2] - probe_length
         
-        # 确认对话框
-        msg = f"当前位置: X={origin_tcp[0]:.2f}, Y={origin_tcp[1]:.2f}, Z={origin_tcp[2]:.2f}\n" \
-              f"目标位置: X={target_x:.2f}, Y={target_y:.2f}, Z={target_z:.2f}\n" \
-              f"偏移量: X={offset_x:+.2f}, Y={offset_y:+.2f}, Z={offset_z:+.2f}\n\n" \
+        # 计算探针尖端的偏移量
+        offset_tip_x = target_tip_x - origin_tip_x
+        offset_tip_y = target_tip_y - origin_tip_y
+        offset_tip_z = target_tip_z - origin_tip_z
+        
+        # 确认对话框（显示探针尖端坐标）
+        msg = f"探针尖端当前: X={origin_tip_x:.2f}, Y={origin_tip_y:.2f}, Z={origin_tip_z:.2f}\n" \
+              f"探针尖端目标: X={target_tip_x:.2f}, Y={target_tip_y:.2f}, Z={target_tip_z:.2f}\n" \
+              f"偏移量: X={offset_tip_x:+.2f}, Y={offset_tip_y:+.2f}, Z={offset_tip_z:+.2f}\n\n" \
               f"是否执行移动？"
         
         if QMessageBox.question(self, "确认移动", msg) != QMessageBox.Yes:
             return
         
         # 在后台线程中执行移动
+        # 注意：传入的是法兰盘原点位置和探针尖端目标位置
         threading.Thread(
             target=self._execute_single_point_move,
-            args=(origin_tcp, target_x, target_y, target_z, target_rx, target_ry, target_rz),
+            args=(origin_flange_tcp, target_tip_x, target_tip_y, target_tip_z, 
+                  target_tip_rx, target_tip_ry, target_tip_rz, probe_length),
             daemon=True
         ).start()
 
-    def _execute_single_point_move(self, origin_tcp, target_x, target_y, target_z, target_rx, target_ry, target_rz):
+    def _execute_single_point_move(self, origin_flange_tcp, target_tip_x, target_tip_y, 
+                                    target_tip_z, target_tip_rx, target_tip_ry, target_tip_rz,
+                                    probe_length):
         """
         执行单点遥操作移动（在后台线程中运行）
+        用户输入的是探针尖端目标位置，需要转换为法兰盘偏移量执行
         """
         try:
             # 1. 确保UDP已连接
@@ -274,37 +296,36 @@ class TeachPendantWindow(QMainWindow):
                     return
                 time.sleep(1.0)
             
-            # 3. 计算偏移量
-            offset_x = target_x - origin_tcp[0]
-            offset_y = target_y - origin_tcp[1]
-            offset_z = target_z - origin_tcp[2]
-            offset_rx = target_rx - origin_tcp[3]
-            offset_ry = target_ry - origin_tcp[4]
-            offset_rz = target_rz - origin_tcp[5]
+            # 3. 将当前法兰盘位置转换为探针尖端位置
+            origin_tip_x = origin_flange_tcp[0]
+            origin_tip_y = origin_flange_tcp[1]
+            origin_tip_z = origin_flange_tcp[2] - probe_length
             
-            # 4. 转换到UDP增量坐标系
-            # 根据坐标映射测试结果:
-            # - send_pose(x,...) 直接控制基座 X (1:1)
-            # - send_pose(...,y,...) 控制基座 Y 但需要取反
-            # - Z 也需要取反
-            send_x = offset_x / 1000.0          # X 直接对应
-            send_y = -offset_y / 1000.0         # Y 需要取反  
-            send_z = -offset_z / 1000.0         # Z 取反
-            # 旋转映射: dry(index 3)=ry, drx(index 4)=rx, drz(index 5)=rz
-            dry = np.deg2rad(offset_ry)
-            drx = np.deg2rad(offset_rx)
-            drz = np.deg2rad(offset_rz)
+            # 4. 计算探针尖端的偏移量
+            offset_tip_x = target_tip_x - origin_tip_x
+            offset_tip_y = target_tip_y - origin_tip_y
+            offset_tip_z = target_tip_z - origin_tip_z
+            offset_tip_rx = target_tip_rx - origin_flange_tcp[3]
+            offset_tip_ry = target_tip_ry - origin_flange_tcp[4]
+            offset_tip_rz = target_tip_rz - origin_flange_tcp[5]
+            
+            # 5. 转换为UDP增量坐标系（探针尖端偏移量 = 法兰盘偏移量）
+            send_x = offset_tip_x / 1000.0          # X 直接对应
+            send_y = -offset_tip_y / 1000.0         # Y 需要取反  
+            send_z = -offset_tip_z / 1000.0         # Z 取反
+            dry = np.deg2rad(offset_tip_ry)
+            drx = np.deg2rad(offset_tip_rx)
+            drz = np.deg2rad(offset_tip_rz)
             
             print(f"\n{'='*60}")
             print("[单点遥操作] 开始移动")
-            print(f"[原点] X={origin_tcp[0]:.2f}, Y={origin_tcp[1]:.2f}, Z={origin_tcp[2]:.2f}")
-            print(f"[目标] X={target_x:.2f}, Y={target_y:.2f}, Z={target_z:.2f}")
-            print(f"[偏移] X={offset_x:+.2f}, Y={offset_y:+.2f}, Z={offset_z:+.2f}")
+            print(f"[探针尖端原点] X={origin_tip_x:.2f}, Y={origin_tip_y:.2f}, Z={origin_tip_z:.2f}")
+            print(f"[探针尖端目标] X={target_tip_x:.2f}, Y={target_tip_y:.2f}, Z={target_tip_z:.2f}")
+            print(f"[尖端偏移量] X={offset_tip_x:+.2f}, Y={offset_tip_y:+.2f}, Z={offset_tip_z:+.2f}")
             print(f"[UDP参数] x={send_x:.4f}, y={send_y:.4f}, z={send_z:.4f}")
             print(f"{'='*60}")
             
-            # 5. 设置控制器偏移量 [send_x, send_y, send_z, dry, drx, drz]
-            # 与 send_pose_euler 参数顺序一致
+            # 6. 设置控制器偏移量
             self.controller.follower_offset[:] = [send_x, send_y, send_z, dry, drx, drz]
             
             # 6. 发送增量指令，持续一段时间让机器人到位
