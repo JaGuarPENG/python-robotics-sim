@@ -51,7 +51,8 @@ class ConveyorTrackingService(QObject):
         self.hover_count = 0      # [新增] 悬停稳定计数器
         
         # === UDP follower_cart 追踪模式 ===
-        self.use_udp_follower = False
+        self.use_udp_follower = False     # 纯UDP追踪（无前馈）
+        self.use_udp_feedforward = False  # UDP+前馈测试模式
         self.p0 = None   # follower_cart 零点 (m, 基座坐标系)
 
         # === 追踪模式控制 ===
@@ -115,11 +116,12 @@ class ConveyorTrackingService(QObject):
         if self.is_running:
             return
 
-        if self.use_udp_follower:
+        if self.use_udp_follower or self.use_udp_feedforward:
             if not self.controller.udp_connected:
                 self.controller.connect_udp(9998)
             self.p0 = self.controller.init_udp_tracking_mode()
-            print(f"[UDP追踪] 零点P0 = {[f'{v:.4f}' for v in self.p0]}")
+            mode_str = "UDP+前馈" if self.use_udp_feedforward else "纯UDP"
+            print(f"[{mode_str}追踪] 零点P0 = {[f'{v:.4f}' for v in self.p0]}")
 
         self.is_running = True
         self.state = "OBSERVING"
@@ -148,9 +150,10 @@ class ConveyorTrackingService(QObject):
         if self.control_thread:
             self.control_thread.join(timeout=1.0)
 
-        if self.use_udp_follower:
+        if self.use_udp_follower or self.use_udp_feedforward:
             self.controller.cmd_stop_follower()
             self.p0 = None
+            self.use_udp_feedforward = False
 
         self.status_updated.emit("传送带追踪服务已停止")
         print("[阶段四] 传送带追踪服务已停止")
@@ -226,8 +229,8 @@ class ConveyorTrackingService(QObject):
             valid = target_data.get('valid', False)
             target_pos = target_data.get('pos')
             
-            if self.use_udp_follower and self.p0 is not None:
-                # UDP追踪悬停高度（小球上方50mm）
+            if self.use_udp_feedforward and self.p0 is not None:
+                # ========== UDP+前馈测试模式（实验性）==========
                 hover_height = 0.050  # 50mm
                 # 自适应前馈参数：预瞄时间（秒）
                 lookahead_time = 0.15  # 150ms预瞄，可根据实际情况调整
@@ -237,7 +240,6 @@ class ConveyorTrackingService(QObject):
                     time_since_vision = loop_start_time - target_data['timestamp']
                     
                     # 计算前馈补偿后的目标位置
-                    # 传送带沿Y轴运动，速度为conveyor_speed_y
                     conveyor_speed = target_data.get('conveyor_speed', self.conveyor_speed_y)
                     
                     # 预瞄位置 = 当前位置 + 速度 × (预瞄时间 + 视觉延迟)
@@ -247,15 +249,36 @@ class ConveyorTrackingService(QObject):
                     
                     # 计算悬停位置：小球上方50mm
                     hover_pos = list(predicted_pos)
-                    hover_pos[2] += hover_height  # Z轴向上偏移50mm
+                    hover_pos[2] += hover_height
                     
                     # 发送UDP偏移到悬停位置（带前馈补偿）
                     self.controller.send_udp_target(hover_pos, self.p0)
                     self._last_udp_target = hover_pos
                     
-                    # 调试输出（每30帧输出一次，避免刷屏）
-                    if not hasattr(self, '_udp_debug_counter'):
-                        self._udp_debug_counter = 0
+                    # 调试输出
+                    if not hasattr(self, '_udp_ff_debug_counter'):
+                        self._udp_ff_debug_counter = 0
+                    self._udp_ff_debug_counter += 1
+                    if self._udp_ff_debug_counter % 30 == 0:
+                        print(f"[UDP+前馈] 当前Y:{target_pos[1]:.3f}m 预测Y:{predicted_pos[1]:.3f}m "
+                              f"速度:{conveyor_speed:.3f}m/s 延迟:{total_latency*1000:.1f}ms")
+                else:
+                    # 目标丢失：悬停在最后看到小球的坐标上方
+                    if hasattr(self, '_last_udp_target') and self._last_udp_target is not None:
+                        self.controller.send_udp_target(self._last_udp_target, self.p0)
+                        
+            elif self.use_udp_follower and self.p0 is not None:
+                # ========== 纯UDP追踪模式（无前馈）==========
+                hover_height = 0.050  # 50mm
+                
+                if has_target and valid and target_pos is not None and state != "OBSERVING":
+                    # 纯UDP追踪：直接发送到目标位置，不做任何预测
+                    hover_pos = list(target_pos)
+                    hover_pos[2] += hover_height  # Z轴向上偏移50mm
+                    
+                    # 发送UDP偏移到悬停位置（无补偿）
+                    self.controller.send_udp_target(hover_pos, self.p0)
+                    self._last_udp_target = hover_pos
                     self._udp_debug_counter += 1
                     if self._udp_debug_counter % 30 == 0:
                         print(f"[UDP追踪] 当前Y:{target_pos[1]:.3f}m 预测Y:{predicted_pos[1]:.3f}m "

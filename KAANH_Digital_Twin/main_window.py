@@ -155,6 +155,22 @@ class TeachPendantWindow(QMainWindow):
             self.tracking_service.stop_tracking()
             self.tracking_service.use_udp_follower = False
 
+    def _on_udp_feedforward_toggled(self, checked):
+        """处理UDP+前馈测试按钮"""
+        if checked:
+            if not self.controller.state.is_enabled:
+                QMessageBox.warning(self, "警告", "机器人未使能！")
+                self.vision_panel.udp_feedforward_btn.blockSignals(True)
+                self.vision_panel.udp_feedforward_btn.setChecked(False)
+                self.vision_panel.on_udp_feedforward_toggled(False)
+                self.vision_panel.udp_feedforward_btn.blockSignals(False)
+                return
+            self.tracking_service.use_udp_feedforward = True
+            self.tracking_service.start_tracking()
+        else:
+            self.tracking_service.stop_tracking()
+            self.tracking_service.use_udp_feedforward = False
+
     def _on_get_current_position_requested(self):
         """处理获取当前坐标请求 - 显示探针尖端位置"""
         if not self.controller.state.is_enabled:
@@ -427,6 +443,7 @@ class TeachPendantWindow(QMainWindow):
 
         self.vision_panel.conveyor_speed_changed.connect(self._on_conveyor_speed_changed)
         self.vision_panel.conveyor_udp_follower_tracking_toggled.connect(self._on_conveyor_udp_follower_tracking_toggled)
+        self.vision_panel.udp_feedforward_toggled.connect(self._on_udp_feedforward_toggled)
         self.vision_panel.single_point_move_requested.connect(self._on_single_point_move_requested)
         self.vision_panel.get_current_position_requested.connect(self._on_get_current_position_requested)
         vision_layout.addWidget(self.vision_panel)

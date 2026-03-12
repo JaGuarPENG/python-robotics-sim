@@ -30,6 +30,9 @@ class VisionPanel(QWidget):
     single_point_move_requested = pyqtSignal(float, float, float, float, float, float)
     get_current_position_requested = pyqtSignal()
     
+    # UDP+前馈测试信号
+    udp_feedforward_toggled = pyqtSignal(bool)
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.csv_path = 'csv/vision_trajectory.csv'
@@ -179,7 +182,7 @@ class VisionPanel(QWidget):
         self.offset_tracking_btn.toggled.connect(self.on_offset_tracking_toggled)
         tracking_layout.addWidget(self.offset_tracking_btn)
         
-        # UDP追踪按钮
+        # UDP追踪按钮（纯UDP，无前馈）
         self.udp_follower_tracking_btn = QPushButton("📡 UDP追踪")
         self.udp_follower_tracking_btn.setCheckable(True)
         self.udp_follower_tracking_btn.setMinimumHeight(45)
@@ -189,6 +192,17 @@ class VisionPanel(QWidget):
         """)
         self.udp_follower_tracking_btn.toggled.connect(self.on_udp_follower_tracking_toggled)
         tracking_layout.addWidget(self.udp_follower_tracking_btn)
+        
+        # UDP+前馈测试按钮（实验性）
+        self.udp_feedforward_btn = QPushButton("🧪 UDP+前馈(测试)")
+        self.udp_feedforward_btn.setCheckable(True)
+        self.udp_feedforward_btn.setMinimumHeight(45)
+        self.udp_feedforward_btn.setStyleSheet("""
+            QPushButton { background-color: #16a085; color: white; font-weight: bold; font-size: 14px; }
+            QPushButton:checked { background-color: #e74c3c; }
+        """)
+        self.udp_feedforward_btn.toggled.connect(self.on_udp_feedforward_toggled)
+        tracking_layout.addWidget(self.udp_feedforward_btn)
         
         layout.addLayout(tracking_layout)
         layout.addStretch()
@@ -403,3 +417,7 @@ class VisionPanel(QWidget):
     def on_udp_follower_tracking_toggled(self, checked):
         self.udp_follower_tracking_btn.setText("🛑 停止UDP" if checked else "📡 UDP追踪")
         self.conveyor_udp_follower_tracking_toggled.emit(checked)
+        
+    def on_udp_feedforward_toggled(self, checked):
+        self.udp_feedforward_btn.setText("🛑 停止前馈测试" if checked else "🧪 UDP+前馈(测试)")
+        self.udp_feedforward_toggled.emit(checked)
