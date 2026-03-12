@@ -1,0 +1,33 @@
+{
+  "security": {
+    "auth": {
+      "selectedType": "oauth-personal"
+    }
+  },
+  "hasSeenIdeIntegrationNudge": true,
+  "general": {
+    "previewFeatures": true,
+    "vimMode": true,
+    "debugKeystrokeLogging": true,
+    "sessionRetention": {
+      "warningAcknowledged": true,
+      "enabled": true,
+      "maxAge": "120d"
+    },
+    "plan": {
+      "directory": ""
+    },
+    "checkpointing": {
+      "enabled": true
+    }
+  },
+  "ui": {
+    "showStatusInTitle": true
+  },
+  "ide": {
+    "hasSeenNudge": true
+  },
+  "experimental": {
+    "plan": true
+  }
+}

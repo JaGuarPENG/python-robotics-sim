@@ -562,6 +562,31 @@ class TeachPendantWindow(QMainWindow):
                 T = self.robot_view.robot.fkine(np.deg2rad(joints))
                 self.status_panel.update_tcp_display(model_pos=T.t*1000, model_rpy=T.rpy(unit='deg', order='zyx'))
             except: pass
+        
+        # 更新视野内白点位置显示（如果启用了白点检测）
+        self._update_white_points_detection()
+
+    def _update_white_points_detection(self):
+        """检测视野内的白点并更新UI显示"""
+        # 检查是否启用了白点检测
+        if not hasattr(self, 'vision_panel') or not self.vision_panel.white_points_toggle_btn.isChecked():
+            return
+        
+        try:
+            # 获取渲染器中的白点信息
+            renderer = self.robot_view.renderer
+            if not hasattr(renderer, 'get_visible_white_points'):
+                return
+            
+            # 获取视野内的白点列表
+            white_points = renderer.get_visible_white_points()
+            
+            # 更新UI显示
+            self.vision_panel.update_white_points_display(white_points)
+            
+        except Exception as e:
+            # 静默处理错误，避免影响主循环
+            pass
 
     def on_vision_trajectory_ready(self, points):
         self.current_vision_trajectory = points

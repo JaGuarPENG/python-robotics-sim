@@ -153,6 +153,9 @@ class RobotRenderer:
         T_ee_disp[:3, 3] = ee_pos_disp
         self.fov_actor.user_matrix = T_ee_disp
         
+        # 保存当前末端位姿，供 get_visible_white_points 使用
+        self._last_ee_pose = T_ee_disp.copy()
+        
         # 4. Update Probe pose
         if hasattr(self, 'probe_actor'):
             self.probe_actor.user_matrix = T_ee_disp
@@ -230,6 +233,49 @@ class RobotRenderer:
             if state == 1:
                 return np.array([self.obj_x_coords[i], self.obj_y_coords[i], 0.211]), i
         return None, None
+
+    def get_visible_white_points(self, T_ee=None):
+        """
+        获取视野范围内所有白点（WAITING状态）的位置信息
+        
+        Args:
+            T_ee: 末端执行器位姿矩阵 (4x4)，如果为None则使用当前渲染的位姿
+            
+        Returns:
+            list: [(x, y, z, id), ...] 视野内白点的世界坐标和ID列表
+        """
+        if T_ee is None:
+            # 使用当前显示的末端位姿
+            T_ee = self._last_ee_pose if hasattr(self, '_last_ee_pose') else np.eye(4)
+        
+        T_inv = np.linalg.inv(T_ee)
+        visible_points = []
+        
+        for i, state in enumerate(self.belt_states):
+            # 只检测 WAITING 状态的白点 (state == 0)
+            if state != 0:
+                continue
+                
+            world_pos = np.array([self.obj_x_coords[i], self.obj_y_coords[i], 0.211, 1.0])
+            local_pos = T_inv @ world_pos
+            lx, ly, lz = local_pos[:3]
+            
+            # 检查是否在 60deg FOV 金字塔内 (depth 0.7m, tan(30)≈0.58)
+            is_inside = False
+            if 0 < lz < 0.7:
+                limit = 0.58 * lz
+                if abs(lx) < limit and abs(ly) < limit:
+                    is_inside = True
+            
+            if is_inside:
+                visible_points.append((
+                    self.obj_x_coords[i],
+                    self.obj_y_coords[i],
+                    0.211,
+                    i
+                ))
+        
+        return visible_points
 
     def mark_target_reached(self):
         """Marks the currently tracked ball as reached (red)."""

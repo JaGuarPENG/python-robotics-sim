@@ -234,6 +234,34 @@ class VisionPanel(QWidget):
 
         layout.addWidget(single_point_group)
 
+        # --- 第四部分：传送带白点检测显示 ---
+        white_points_group = QGroupBox("传送带白点检测 (视野范围内)")
+        white_points_layout = QVBoxLayout(white_points_group)
+
+        # 白点数量显示
+        self.white_points_count_label = QLabel("视野内白点数量: 0")
+        self.white_points_count_label.setStyleSheet("color: #f39c12; font-weight: bold;")
+        white_points_layout.addWidget(self.white_points_count_label)
+
+        # 白点位置列表
+        self.white_points_text = QLabel("暂无白点进入视野")
+        self.white_points_text.setWordWrap(True)
+        self.white_points_text.setStyleSheet("color: #ecf0f1; font-family: Courier New; font-size: 11px;")
+        self.white_points_text.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        white_points_layout.addWidget(self.white_points_text)
+
+        # 启用/禁用白点检测
+        self.white_points_toggle_btn = QPushButton("🔍 启用白点检测")
+        self.white_points_toggle_btn.setCheckable(True)
+        self.white_points_toggle_btn.setMinimumHeight(40)
+        self.white_points_toggle_btn.setStyleSheet("""
+            QPushButton { background-color: #9b59b6; color: white; font-weight: bold; }
+            QPushButton:checked { background-color: #e74c3c; }
+        """)
+        white_points_layout.addWidget(self.white_points_toggle_btn)
+
+        layout.addWidget(white_points_group)
+
     def on_offset_tracking_toggled(self, checked):
         """处理自适应隐性 Offset 追踪按钮点击"""
         if checked:
@@ -384,3 +412,22 @@ class VisionPanel(QWidget):
         self.rx_input.setText(f"{rx:.2f}")
         self.ry_input.setText(f"{ry:.2f}")
         self.rz_input.setText(f"{rz:.2f}")
+    
+    def update_white_points_display(self, white_points_list):
+        """
+        更新视野内白点位置显示
+        
+        Args:
+            white_points_list: [(x, y, z, id), ...] 白点位置列表（单位：米）
+        """
+        count = len(white_points_list)
+        self.white_points_count_label.setText(f"视野内白点数量: {count}")
+        
+        if count == 0:
+            self.white_points_text.setText("暂无白点进入视野")
+        else:
+            text_lines = ["白点位置 (X, Y, Z mm):"]
+            for x, y, z, pid in white_points_list:
+                # 转换为毫米并格式化
+                text_lines.append(f"  ID{pid}: X={x*1000:6.1f} Y={y*1000:6.1f} Z={z*1000:6.1f}")
+            self.white_points_text.setText("\n".join(text_lines))
