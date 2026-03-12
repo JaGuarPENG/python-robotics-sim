@@ -4,7 +4,7 @@
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QPushButton, QMessageBox, QFileDialog,
-    QHBoxLayout, QSlider
+    QHBoxLayout, QSlider, QLineEdit, QGridLayout
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 import pandas as pd
@@ -25,6 +25,13 @@ class VisionPanel(QWidget):
     conveyor_speed_changed = pyqtSignal(float)
     conveyor_hover_only_toggled = pyqtSignal(bool)
     conveyor_udp_follower_tracking_toggled = pyqtSignal(bool)
+    
+    # 单点遥操作移动信号: (target_x, target_y, target_z, target_rx, target_ry, target_rz)
+    # 传入的是目标绝对坐标，由主窗口计算偏移量
+    single_point_move_requested = pyqtSignal(float, float, float, float, float, float)
+    
+    # 获取当前坐标信号
+    get_current_position_requested = pyqtSignal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -150,6 +157,83 @@ class VisionPanel(QWidget):
 
         layout.addWidget(tracking_group)
 
+        # --- 第三部分：单点遥操作移动 ---
+        single_point_group = QGroupBox("单点遥操作移动 (UDP增量模式)")
+        single_point_layout = QVBoxLayout(single_point_group)
+
+        # 当前坐标显示
+        current_pos_layout = QHBoxLayout()
+        current_pos_layout.addWidget(QLabel("当前坐标:"))
+        self.current_pos_label = QLabel("未获取")
+        self.current_pos_label.setStyleSheet("color: #2ecc71; font-family: Courier New; font-weight: bold;")
+        current_pos_layout.addWidget(self.current_pos_label)
+        single_point_layout.addLayout(current_pos_layout)
+
+        # 刷新当前坐标按钮
+        self.refresh_pos_btn = QPushButton("🔄 获取当前坐标")
+        self.refresh_pos_btn.setMinimumHeight(35)
+        self.refresh_pos_btn.setStyleSheet("background-color: #3498db; color: white;")
+        self.refresh_pos_btn.clicked.connect(self.get_current_position_requested.emit)
+        single_point_layout.addWidget(self.refresh_pos_btn)
+
+        # 分隔线
+        line = QLabel("=" * 50)
+        line.setStyleSheet("color: #7f8c8d;")
+        single_point_layout.addWidget(line)
+
+        # 目标坐标输入区域
+        single_point_layout.addWidget(QLabel("目标坐标 (绝对位置):"))
+        input_grid = QGridLayout()
+        
+        # X, Y, Z 输入
+        input_grid.addWidget(QLabel("X (mm):"), 0, 0)
+        self.x_input = QLineEdit()
+        self.x_input.setPlaceholderText("目标X坐标(mm)")
+        input_grid.addWidget(self.x_input, 0, 1)
+        
+        input_grid.addWidget(QLabel("Y (mm):"), 0, 2)
+        self.y_input = QLineEdit()
+        self.y_input.setPlaceholderText("目标Y坐标(mm)")
+        input_grid.addWidget(self.y_input, 0, 3)
+        
+        input_grid.addWidget(QLabel("Z (mm):"), 1, 0)
+        self.z_input = QLineEdit()
+        self.z_input.setPlaceholderText("目标Z坐标(mm)")
+        input_grid.addWidget(self.z_input, 1, 1)
+        
+        # Rx, Ry, Rz 输入
+        input_grid.addWidget(QLabel("Rx (°):"), 1, 2)
+        self.rx_input = QLineEdit()
+        self.rx_input.setPlaceholderText("目标Rx角度(°)")
+        input_grid.addWidget(self.rx_input, 1, 3)
+        
+        input_grid.addWidget(QLabel("Ry (°):"), 2, 0)
+        self.ry_input = QLineEdit()
+        self.ry_input.setPlaceholderText("目标Ry角度(°)")
+        input_grid.addWidget(self.ry_input, 2, 1)
+        
+        input_grid.addWidget(QLabel("Rz (°):"), 2, 2)
+        self.rz_input = QLineEdit()
+        self.rz_input.setPlaceholderText("目标Rz角度(°)")
+        input_grid.addWidget(self.rz_input, 2, 3)
+        
+        single_point_layout.addLayout(input_grid)
+
+        # 提示标签
+        self.single_point_info = QLabel("先获取当前坐标，再输入目标坐标\n系统会自动计算偏移量并移动")
+        self.single_point_info.setWordWrap(True)
+        self.single_point_info.setStyleSheet("color: #bdc3c7; font-size: 11px;")
+        single_point_layout.addWidget(self.single_point_info)
+
+        # 移动按钮
+        self.single_point_move_btn = QPushButton("▶ 执行移动到目标坐标")
+        self.single_point_move_btn.setMinimumHeight(50)
+        self.single_point_move_btn.setStyleSheet("background-color: #16a085; color: white; font-weight: bold;")
+        self.single_point_move_btn.clicked.connect(self.on_single_point_move_clicked)
+        single_point_layout.addWidget(self.single_point_move_btn)
+
+        layout.addWidget(single_point_group)
+
     def on_offset_tracking_toggled(self, checked):
         """处理自适应隐性 Offset 追踪按钮点击"""
         if checked:
@@ -258,3 +342,45 @@ class VisionPanel(QWidget):
     def on_udp_execution_clicked(self):
         """点击 UDP 增量执行"""
         self.udp_execution_requested.emit()
+
+    def on_single_point_move_clicked(self):
+        """处理单点遥操作移动按钮点击"""
+        try:
+            # 检查是否已获取当前坐标
+            if self.current_pos_label.text() == "未获取":
+                QMessageBox.warning(self, "提示", "请先点击'获取当前坐标'按钮")
+                return
+            
+            # 获取输入值
+            if not self.x_input.text().strip():
+                QMessageBox.warning(self, "输入错误", "请输入目标X坐标")
+                return
+            if not self.y_input.text().strip():
+                QMessageBox.warning(self, "输入错误", "请输入目标Y坐标")
+                return
+            if not self.z_input.text().strip():
+                QMessageBox.warning(self, "输入错误", "请输入目标Z坐标")
+                return
+                
+            x = float(self.x_input.text().strip())
+            y = float(self.y_input.text().strip())
+            z = float(self.z_input.text().strip())
+            rx = float(self.rx_input.text().strip()) if self.rx_input.text().strip() else 180.0
+            ry = float(self.ry_input.text().strip()) if self.ry_input.text().strip() else 0.0
+            rz = float(self.rz_input.text().strip()) if self.rz_input.text().strip() else 0.0
+            
+            self.single_point_move_requested.emit(x, y, z, rx, ry, rz)
+        except ValueError as e:
+            QMessageBox.warning(self, "输入错误", f"请输入有效的数字: {e}")
+    
+    def update_current_position_display(self, x, y, z, rx, ry, rz):
+        """更新当前坐标显示"""
+        self.current_pos_label.setText(f"X:{x:.2f} Y:{y:.2f} Z:{z:.2f} Rx:{rx:.2f} Ry:{ry:.2f} Rz:{rz:.2f}")
+        
+        # 自动填充目标坐标输入框为当前坐标（方便用户微调）
+        self.x_input.setText(f"{x:.2f}")
+        self.y_input.setText(f"{y:.2f}")
+        self.z_input.setText(f"{z:.2f}")
+        self.rx_input.setText(f"{rx:.2f}")
+        self.ry_input.setText(f"{ry:.2f}")
+        self.rz_input.setText(f"{rz:.2f}")

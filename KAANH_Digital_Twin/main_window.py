@@ -196,6 +196,158 @@ class TeachPendantWindow(QMainWindow):
             self.tracking_service.stop_tracking()
             self.tracking_service.use_udp_follower = False
 
+    def _on_get_current_position_requested(self):
+        """处理获取当前坐标请求"""
+        if not self.controller.state.is_enabled:
+            QMessageBox.warning(self, "警告", "机器人未使能，请先连接并使能机器人！")
+            return
+        
+        # 使用 controller 获取当前 TCP（已通过 follower_client 修正旋转顺序）
+        tcp = self.controller.get_current_tcp_mm_deg()
+        if tcp:
+            self.vision_panel.update_current_position_display(
+                tcp[0], tcp[1], tcp[2], tcp[3], tcp[4], tcp[5]
+            )
+            self.statusBar.showMessage(f"当前坐标: X={tcp[0]:.2f}, Y={tcp[1]:.2f}, Z={tcp[2]:.2f}, Rx={tcp[3]:.2f}, Ry={tcp[4]:.2f}, Rz={tcp[5]:.2f}")
+        else:
+            QMessageBox.warning(self, "警告", "无法获取当前坐标")
+
+    def _on_single_point_move_requested(self, target_x, target_y, target_z, target_rx, target_ry, target_rz):
+        """
+        处理单点遥操作移动请求
+        从当前位置移动到目标绝对坐标位置
+        """
+        # 检查机器人状态
+        if not self.controller.state.is_enabled:
+            QMessageBox.warning(self, "警告", "机器人未使能，请先连接并使能机器人！")
+            return
+        
+        # 获取当前位置作为原点
+        origin_tcp = self.controller.get_current_tcp_mm_deg()
+        if not origin_tcp:
+            QMessageBox.warning(self, "警告", "无法获取当前坐标，请先点击'获取当前坐标'")
+            return
+        
+        # 计算偏移量
+        offset_x = target_x - origin_tcp[0]
+        offset_y = target_y - origin_tcp[1]
+        offset_z = target_z - origin_tcp[2]
+        offset_rx = target_rx - origin_tcp[3]
+        offset_ry = target_ry - origin_tcp[4]
+        offset_rz = target_rz - origin_tcp[5]
+        
+        # 确认对话框
+        msg = f"当前位置: X={origin_tcp[0]:.2f}, Y={origin_tcp[1]:.2f}, Z={origin_tcp[2]:.2f}\n" \
+              f"目标位置: X={target_x:.2f}, Y={target_y:.2f}, Z={target_z:.2f}\n" \
+              f"偏移量: X={offset_x:+.2f}, Y={offset_y:+.2f}, Z={offset_z:+.2f}\n\n" \
+              f"是否执行移动？"
+        
+        if QMessageBox.question(self, "确认移动", msg) != QMessageBox.Yes:
+            return
+        
+        # 在后台线程中执行移动
+        threading.Thread(
+            target=self._execute_single_point_move,
+            args=(origin_tcp, target_x, target_y, target_z, target_rx, target_ry, target_rz),
+            daemon=True
+        ).start()
+
+    def _execute_single_point_move(self, origin_tcp, target_x, target_y, target_z, target_rx, target_ry, target_rz):
+        """
+        执行单点遥操作移动（在后台线程中运行）
+        """
+        try:
+            # 1. 确保UDP已连接
+            if not self.controller.udp_connected:
+                self.signals.status_updated.emit("正在连接 UDP...")
+                if not self.controller.connect_udp():
+                    self.signals.error_occurred.emit("UDP 连接失败")
+                    return
+                time.sleep(0.5)
+            
+            # 2. 确保跟随模式已启动
+            if not self.controller.is_follower_mode:
+                self.signals.status_updated.emit("正在启动跟随模式...")
+                ip = self.conn_panel.get_ip()
+                if not self.controller.start_follower_mode(ip):
+                    self.signals.error_occurred.emit("跟随模式启动失败")
+                    return
+                time.sleep(1.0)
+            
+            # 3. 计算偏移量
+            offset_x = target_x - origin_tcp[0]
+            offset_y = target_y - origin_tcp[1]
+            offset_z = target_z - origin_tcp[2]
+            offset_rx = target_rx - origin_tcp[3]
+            offset_ry = target_ry - origin_tcp[4]
+            offset_rz = target_rz - origin_tcp[5]
+            
+            # 4. 转换到UDP增量坐标系
+            # 根据坐标映射测试结果:
+            # - send_pose(x,...) 直接控制基座 X (1:1)
+            # - send_pose(...,y,...) 控制基座 Y 但需要取反
+            # - Z 也需要取反
+            send_x = offset_x / 1000.0          # X 直接对应
+            send_y = -offset_y / 1000.0         # Y 需要取反  
+            send_z = -offset_z / 1000.0         # Z 取反
+            # 旋转映射: dry(index 3)=ry, drx(index 4)=rx, drz(index 5)=rz
+            dry = np.deg2rad(offset_ry)
+            drx = np.deg2rad(offset_rx)
+            drz = np.deg2rad(offset_rz)
+            
+            print(f"\n{'='*60}")
+            print("[单点遥操作] 开始移动")
+            print(f"[原点] X={origin_tcp[0]:.2f}, Y={origin_tcp[1]:.2f}, Z={origin_tcp[2]:.2f}")
+            print(f"[目标] X={target_x:.2f}, Y={target_y:.2f}, Z={target_z:.2f}")
+            print(f"[偏移] X={offset_x:+.2f}, Y={offset_y:+.2f}, Z={offset_z:+.2f}")
+            print(f"[UDP参数] x={send_x:.4f}, y={send_y:.4f}, z={send_z:.4f}")
+            print(f"{'='*60}")
+            
+            # 5. 设置控制器偏移量 [send_x, send_y, send_z, dry, drx, drz]
+            # 与 send_pose_euler 参数顺序一致
+            self.controller.follower_offset[:] = [send_x, send_y, send_z, dry, drx, drz]
+            
+            # 6. 发送增量指令，持续一段时间让机器人到位
+            self.signals.status_updated.emit(f"正在移动至目标位置...")
+            move_duration = 5.0  # 移动持续时间(秒)
+            start_time = time.time()
+            count = 0
+            
+            while time.time() - start_time < move_duration:
+                t_loop_start = time.perf_counter()
+                
+                if not self.controller.state.is_enabled or not self.controller.is_follower_mode:
+                    self.signals.error_occurred.emit("机器人状态异常，移动中断")
+                    return
+                
+                # 发送UDP增量
+                # 根据坐标映射测试结果: send_pose(x, y, z, ...)
+                # x=基座X偏移, y=基座Y偏移(取反), z=基座Z偏移(取反)
+                self.controller.udp_client.send_pose_euler(send_x, send_y, send_z, dry, drx, drz)
+                count += 1
+                
+                # 控制发送频率 50Hz
+                time.sleep(max(0, 0.02 - (time.perf_counter() - t_loop_start)))
+            
+            # 7. 获取最终位置
+            final_tcp = self.controller.get_current_tcp_mm_deg()
+            if final_tcp:
+                error = np.linalg.norm([
+                    final_tcp[0] - target_x,
+                    final_tcp[1] - target_y,
+                    final_tcp[2] - target_z
+                ])
+                print(f"[完成] 最终位置: X={final_tcp[0]:.2f}, Y={final_tcp[1]:.2f}, Z={final_tcp[2]:.2f}")
+                print(f"[完成] 位置误差: {error:.2f}mm")
+                self.signals.status_updated.emit(f"单点移动完成，误差: {error:.2f}mm")
+            else:
+                self.signals.status_updated.emit("单点移动完成")
+                
+        except Exception as e:
+            self.signals.error_occurred.emit(f"单点移动异常: {e}")
+            import traceback
+            traceback.print_exc()
+
     def _on_conveyor_hover_only_toggled(self, checked):
         """处理来自 VisionPanel 的仅悬停追踪开关请求"""
         if checked:
@@ -311,6 +463,8 @@ class TeachPendantWindow(QMainWindow):
         self.vision_panel.conveyor_hover_only_toggled.connect(self._on_conveyor_hover_only_toggled)
         self.vision_panel.conveyor_speed_changed.connect(self._on_conveyor_speed_changed)
         self.vision_panel.conveyor_udp_follower_tracking_toggled.connect(self._on_conveyor_udp_follower_tracking_toggled)
+        self.vision_panel.single_point_move_requested.connect(self._on_single_point_move_requested)
+        self.vision_panel.get_current_position_requested.connect(self._on_get_current_position_requested)
         vision_layout.addWidget(self.vision_panel)
         vision_layout.addStretch()
         self.tabs.addTab(vision_tab, "视觉引导")

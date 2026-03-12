@@ -168,7 +168,13 @@ class FollowerClient:
                 # 提取末端位姿 (欧拉角)
                 pe = motion_msg.get('pe', [])
                 if pe and len(pe) > 0 and len(pe[0]) >= 6:
-                    self._actual_pe = np.array(pe[0][:6], dtype=np.float64)
+                    # 工控机返回的旋转顺序是 [rz, ry, rx]，需要转换为 [rx, ry, rz]
+                    # pe[0][3]=rz, pe[0][4]=ry, pe[0][5]=rx
+                    pe_raw = pe[0][:6]
+                    self._actual_pe = np.array([
+                        pe_raw[0], pe_raw[1], pe_raw[2],  # x, y, z
+                        pe_raw[5], pe_raw[4], pe_raw[3]   # rx, ry, rz (交换顺序)
+                    ], dtype=np.float64)
 
                 # 提取末端位姿 (四元数)
                 pq = motion_msg.get('pq', [])
@@ -773,7 +779,12 @@ class FollowerClientWebSocket:
                 # 提取末端位姿 (欧拉角)
                 pe = motion_msg.get('pe', [])
                 if pe and len(pe) > 0 and len(pe[0]) >= 6:
-                    self._actual_pe = np.array(pe[0][:6], dtype=np.float64)
+                    # 工控机返回的旋转顺序是 [rz, ry, rx]，需要转换为 [rx, ry, rz]
+                    pe_raw = pe[0][:6]
+                    self._actual_pe = np.array([
+                        pe_raw[0], pe_raw[1], pe_raw[2],  # x, y, z
+                        pe_raw[5], pe_raw[4], pe_raw[3]   # rx, ry, rz (交换顺序)
+                    ], dtype=np.float64)
 
                 # 提取末端位姿 (四元数)
                 pq = motion_msg.get('pq', [])
