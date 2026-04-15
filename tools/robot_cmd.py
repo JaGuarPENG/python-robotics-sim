@@ -2,7 +2,7 @@
 交互式机器人命令工具
 
 用法:
-    python tools/robot_cmd.py --ip 192.168.0.10
+    python tools/robot_cmd.py --ip 192.168.1.10
 
 然后输入命令，如:
     logout
@@ -24,7 +24,7 @@ import hashlib
 import json
 
 # 配置
-ROBOT_IP = "192.168.0.10"
+ROBOT_IP = "192.168.1.10"
 WS_PORT = 5999
 
 

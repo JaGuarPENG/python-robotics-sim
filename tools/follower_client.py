@@ -31,7 +31,7 @@ class FollowerClient:
     HEADER_FORMAT = '<IIQqqq'  # msg_len, msg_id, msg_type, reserved1, reserved2, reserved3
     HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
-    def __init__(self, ip: str = "192.168.0.10", port: int = 9998, timeout: float = 1.0):
+    def __init__(self, ip: str = "192.168.1.10", port: int = 9998, timeout: float = 1.0):
         """
         初始化遥操作客户端
 
@@ -368,7 +368,7 @@ class FollowerClientWebSocket:
     通过 WebSocket 端口 5999 发送 get 指令获取机器人状态
     """
 
-    def __init__(self, ip: str = "192.168.0.10", port: int = 5999, timeout: float = 5.0):
+    def __init__(self, ip: str = "192.168.1.10", port: int = 5999, timeout: float = 5.0):
         self.ip = ip
         self.port = port
         self.timeout = timeout
@@ -874,7 +874,7 @@ if __name__ == "__main__":
     import math
 
     # 测试 UDP 客户端
-    client = FollowerClient("192.168.0.10", 9998)
+    client = FollowerClient("192.168.1.10", 9998)
 
     if client.connect():
         print("\n--- 测试发送位姿指令 ---")

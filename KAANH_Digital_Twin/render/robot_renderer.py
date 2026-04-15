@@ -63,6 +63,39 @@ class RobotRenderer:
             center_actor = self.plotter.add_mesh(center_dot, color='#ffffff')
             self.belt_centers.append(center_actor)
 
+    def load_step_model(self, step_path: str, scale: float = 0.001, pose: np.ndarray = None, color: str = '#95a5a6'):
+        """加载 STEP 模型到场景中 (自动转 STL 缓存)"""
+        from .step_loader import step_to_mesh
+        
+        if not os.path.exists(step_path):
+            print(f"[RobotRenderer] STEP 文件不存在: {step_path}")
+            return
+        
+        print(f"[RobotRenderer] 正在加载 STEP: {step_path}")
+        tri_mesh = step_to_mesh(step_path, target_faces=99999999)
+        
+        # 缓存为 pyvista 可读取的 STL
+        cache_dir = os.path.join("cache", "mesh")
+        os.makedirs(cache_dir, exist_ok=True)
+        basename = os.path.splitext(os.path.basename(step_path))[0]
+        pv_stl_path = os.path.join(cache_dir, f"{basename}_pv.stl")
+        if not os.path.exists(pv_stl_path):
+            tri_mesh.export(pv_stl_path)
+            print(f"[RobotRenderer] 已缓存 STL: {pv_stl_path}")
+        
+        mesh = pv.read(pv_stl_path)
+        
+        # 缩放 (默认 mm -> m)
+        mesh = mesh.scale([scale, scale, scale])
+        
+        # 应用自定义位姿
+        if pose is not None:
+            mesh = mesh.transform(pose)
+        
+        actor = self.plotter.add_mesh(mesh, color=color, smooth_shading=True, opacity=0.9)
+        print(f"[RobotRenderer] STEP 模型已加载，面数: {mesh.n_faces}")
+        return actor
+
     def create_robot_actors(self):
         """加载 STL 并创建 Actor (已移除 link6 法兰盘)"""
         if not self.model.urdf_robot: return

@@ -29,7 +29,7 @@ class RobotController:
         
         self.is_monitoring = False
         self.monitor_thread = None
-        self.robot_ip = "192.168.0.10"
+        self.robot_ip = "192.168.1.10"
         
         # 缓存累积偏移量
         self.follower_offset = np.zeros(6)
@@ -56,7 +56,7 @@ class RobotController:
             self.signals.error_occurred.emit(f"连接异常: {e}")
             return False
 
-    def login(self, user="Engineer", password="000000"):
+    def login(self, user="Manufacturer", password="2045"):
         success = False
         if self.ws_client and self.ws_client.is_connected:
             self.ws_client.logout()

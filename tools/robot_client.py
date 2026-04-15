@@ -63,7 +63,7 @@ class ArisRobotClient:
 
     # --- 业务指令 ---
 
-    def login(self, user="Engineer", pwd=""):
+    def login(self, user="Manufacturer", pwd="2045"):
         pwd_md5 = hashlib.md5(pwd.encode('utf-8')).hexdigest()
         self._send_raw_command(f"login --user={user} --pwd={pwd_md5}")
 
@@ -112,7 +112,7 @@ class ArisRobotClient:
 if __name__ == "__main__":
     client = ArisRobotClient("192.168.1.5", 5888)
     if client.connect():
-        client.login("Engineer", "000000")
+        client.login("Manufacturer", "2045")
         time.sleep(0.5)
         client.manual_enable()
         print("已登录并使能机器人")

@@ -3,7 +3,7 @@
 """
 
 # 机器人连接配置
-ROBOT_IP = "192.168.0.10"
+ROBOT_IP = "192.168.1.10"
 PORT_CONTROL = 5999  # 控制端口 (WebSocket, 负责发送指令)
 PORT_MONITOR = 5888  # 监控端口 (WebSocket, 负责读取状态)
 

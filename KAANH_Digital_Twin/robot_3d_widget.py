@@ -3,6 +3,7 @@
 """
 
 import numpy as np
+import os
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
 from pyvistaqt import QtInteractor
 
